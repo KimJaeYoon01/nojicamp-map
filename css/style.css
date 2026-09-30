@@ -184,3 +184,4 @@ dialog.sheet button.primary { background: #2b8a3e; border-color: #2b8a3e; color:
 .topbar .logo { width: 28px; height: 28px; border-radius: 7px; }
 .topbar .brand { font-weight: 800; letter-spacing: -0.3px; }
 .topbar .title-text { font-weight: 500; color: var(--muted); font-size: 15px; }
+.sheet .login-msg { padding: 8px 10px; border-radius: 8px; background: rgba(242,183,5,.15); font-size: 14px; line-height: 1.5; }

@@ -530,7 +530,7 @@
   });
   searchInput.addEventListener("blur", () => setTimeout(() => { searchList.hidden = true; }, 150));
   // ---- 로그인 · 즐겨찾기 · 가고 싶은 곳 ----
-  // 로그인 전: 이 기기(localStorage)에 저장. 로그인하면 Supabase(saved_places 표)로 옮기고 동기화.
+  // 로그인해야 저장 (Supabase saved_places 표). 로그인 전에 누르면 로그인 안내 후, 돌아오면 저장.
   // 공개용(publishable) 키이며, 데이터는 행 수준 보안(RLS)으로 본인 것만 접근 가능.
   const SUPABASE_URL = "https://qqwkjemfxlixmdkvfcju.supabase.co";
   const SUPABASE_KEY = "sb_publishable_lsBpp30OIsuAEI7_NcafsQ_6IBkYa4W";
@@ -551,15 +551,6 @@
 
   function readLocal() {
     try { return JSON.parse(localStorage.getItem(LOCAL_KEY)) || {}; } catch { return {}; }
-  }
-  function writeLocal() {
-    try {
-      localStorage.setItem(LOCAL_KEY, JSON.stringify({ favorite: [...saved.favorite], wishlist: [...saved.wishlist] }));
-    } catch { /* 저장소를 못 쓰는 브라우저면 이번 방문 동안만 유지 */ }
-  }
-  function loadLocal() {
-    const d = readLocal();
-    for (const l of Object.keys(LISTS)) saved[l] = new Map(d[l] || []);
   }
 
   async function loadRemote() {
@@ -588,11 +579,11 @@
   async function toggleSaved(list, id) {
     const f = placeById.get(id);
     if (!f) return;
+    if (!user) { askLogin(list, id); return; } // 로그인해야 저장됨 (저장된 줄 알고 잃어버리는 일 방지)
     const m = saved[list];
     const had = m.has(id);
     const v = { name: f.properties.name, lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] };
     had ? m.delete(id) : m.set(id, v);
-    if (!user) { writeLocal(); return; }
     const { error } = had
       ? await sb.from("saved_places").delete().match({ place_id: id, list })
       : await sb.from("saved_places").insert({ place_id: id, list, ...v });
@@ -646,8 +637,27 @@
     }
   }
 
-  function openUserDialog() {
+  // 로그인 전에 누른 ⭐/🚩 는 기억해 뒀다가 로그인하고 돌아오면 저장
+  const PENDING_KEY = "nojicamp.pending.v1";
+  function askLogin(list, id) {
+    try { sessionStorage.setItem(PENDING_KEY, JSON.stringify({ list, id })); } catch { /* 무시 */ }
+    const name = placeById.get(id)?.properties.name || "이 장소";
+    openUserDialog(`${LISTS[list].on} <b>${escapeHtml(name)}</b>을(를) ${LISTS[list].label}에 저장하려면 로그인해 주세요. 로그인하고 돌아오면 바로 저장돼요.`);
+  }
+  async function applyPending() {
+    let p = null;
+    try { p = JSON.parse(sessionStorage.getItem(PENDING_KEY)); sessionStorage.removeItem(PENDING_KEY); } catch { /* 무시 */ }
+    if (p && LISTS[p.list] && placeById.has(p.id) && !saved[p.list].has(p.id)) {
+      await toggleSaved(p.list, p.id);
+      openPlace(p.id); // 저장된 모습을 바로 보여줌
+    }
+  }
+
+  function openUserDialog(message) {
     if (!sb) { alert("로그인 기능을 불러오지 못했어요. 잠시 후 다시 시도해 주세요."); return; }
+    if (!user && typeof message !== "string") {
+      try { sessionStorage.removeItem(PENDING_KEY); } catch { /* 무시 */ } // 그냥 로그인 버튼으로 연 경우
+    }
     userDialog.innerHTML = user ? `
       <h2>내 계정</h2>
       <p>${escapeHtml(user.user_metadata?.full_name || "")}<br><span class="muted">${escapeHtml(user.email || "")}</span></p>
@@ -655,8 +665,8 @@
         회원 탈퇴는 <a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>의 문의처로 요청해 주세요.</p>
       <div class="row-btns"><button data-act="close">닫기</button><button data-act="logout">로그아웃</button></div>` : `
       <h2>로그인</h2>
-      <p class="muted">로그인하면 즐겨찾기와 가고 싶은 곳을 휴대폰·PC 어디서나 볼 수 있어요.
-        지금 이 기기에 저장한 목록도 계정으로 옮겨져요.</p>
+      ${typeof message === "string" ? `<p class="login-msg">${message}</p>` : ""}
+      <p class="muted">로그인하면 ⭐ 즐겨찾기와 🚩 가고 싶은 곳을 저장하고, 휴대폰·PC 어디서나 볼 수 있어요.</p>
       <button class="login-btn kakao" data-act="kakao"><b>💬</b> 카카오로 로그인</button>
       <button class="login-btn google-btn" data-act="google"><b style="color:#4285f4">G</b> 구글로 로그인</button>
       <p class="muted">로그인하면 이메일·이름(닉네임)·프로필 사진을 받아 목록 저장에만 사용합니다.
@@ -667,6 +677,14 @@
 
   let listTab = "favorite";
   function renderList() {
+    if (!user) {
+      listDialog.innerHTML = `
+        <h2>내 목록</h2>
+        <p>⭐ 즐겨찾기와 🚩 가고 싶은 곳은 <b>로그인하면</b> 쓸 수 있어요.</p>
+        <p class="muted">카카오나 구글 계정으로 10초면 로그인돼요. 저장한 목록은 휴대폰·PC 어디서나 볼 수 있어요.</p>
+        <div class="row-btns"><button data-act="close">닫기</button><button class="primary" data-act="login">로그인</button></div>`;
+      return;
+    }
     const items = [...saved[listTab]].map(([id, v]) => `
       <li><button class="go" data-go="${escapeHtml(id)}">${escapeHtml(v.name)}
         <small>${escapeHtml(placeById.get(id)?.properties.addr || "")}</small></button>
@@ -676,11 +694,10 @@
       <div class="tabs">${Object.entries(LISTS).map(([k, v]) =>
         `<button data-tab="${k}" class="${k === listTab ? "on" : ""}">${v.on} ${v.label} ${saved[k].size}</button>`).join("")}</div>
       <ul class="saved-list">${items || `<li class="muted">아직 없어요. 지도에서 장소를 누르고 ${LISTS[listTab].off} ${LISTS[listTab].label} 버튼을 눌러 보세요.</li>`}</ul>
-      ${user ? "" : `<p class="muted">지금은 이 기기에만 저장돼요. 👤 로그인하면 다른 기기에서도 볼 수 있어요.</p>`}
       <div class="row-btns"><button data-act="close">닫기</button></div>`;
   }
 
-  userBtn.addEventListener("click", openUserDialog);
+  userBtn.addEventListener("click", () => openUserDialog());
   listBtn.addEventListener("click", () => { renderList(); listDialog.showModal(); });
 
   userDialog.addEventListener("click", async (e) => {
@@ -698,6 +715,7 @@
     const t = e.target.closest("button");
     if (!t) return;
     if (t.dataset.act === "close") listDialog.close();
+    if (t.dataset.act === "login") { listDialog.close(); openUserDialog(); }
     if (t.dataset.tab) { listTab = t.dataset.tab; renderList(); }
     if (t.dataset.go) { listDialog.close(); openPlace(t.dataset.go); }
     if (t.dataset.del) { await toggleSaved(listTab, t.dataset.del); renderList(); }
@@ -707,13 +725,18 @@
     const next = session?.user || null;
     if ((next?.id || null) === (user?.id || null)) return;
     user = next;
-    if (user) { await migrateLocal(); await loadRemote(); } else { loadLocal(); }
+    if (user) {
+      await migrateLocal(); // 예전 버전에서 기기에 저장해 둔 목록이 있으면 계정으로 옮김
+      await loadRemote();
+    } else {
+      for (const l of Object.keys(LISTS)) saved[l] = new Map();
+    }
     renderUserBtn();
     if (listDialog.open) renderList();
     paintSaveBtns(document.querySelector(".leaflet-popup"));
+    if (user) await applyPending();
   }
 
-  loadLocal();
   renderUserBtn();
   // onAuthStateChange 안에서 바로 Supabase 를 호출하면 멈출 수 있어 다음 틱으로 미룸
   sb?.auth.onAuthStateChange((_event, session) => setTimeout(() => onSession(session), 0));
