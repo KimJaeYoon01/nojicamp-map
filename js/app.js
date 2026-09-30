@@ -47,6 +47,9 @@
       ${p.tel ? `<p class="law">☎ ${escapeHtml(p.tel)}</p>` : ""}
       ${safeUrl(p.url) && !/naver\.me/.test(p.url) ? `<p class="law"><a href="${escapeHtml(p.url)}" target="_blank" rel="noopener">자세히 보기 ↗</a></p>` : ""}
       ${p.lat ? `<p class="law"><a href="${escapeHtml(naverUrl(p))}" target="_blank" rel="noopener">네이버 지도에서 보기 ↗</a></p>` : ""}
+      ${p.id ? `<div class="save-btns" data-id="${escapeHtml(p.id)}">
+        <button type="button" data-list="favorite">☆ 즐겨찾기</button>
+        <button type="button" data-list="wishlist" class="wish">⚑ 가고 싶은 곳</button></div>` : ""}
       ${p.source ? `<p class="law"><small>출처: ${escapeHtml(p.source)}</small></p>` : ""}
     </div>`;
   }
@@ -526,4 +529,191 @@
     choose(results[+li.dataset.i]);
   });
   searchInput.addEventListener("blur", () => setTimeout(() => { searchList.hidden = true; }, 150));
+  // ---- 로그인 · 즐겨찾기 · 가고 싶은 곳 ----
+  // 로그인 전: 이 기기(localStorage)에 저장. 로그인하면 Supabase(saved_places 표)로 옮기고 동기화.
+  // 공개용(publishable) 키이며, 데이터는 행 수준 보안(RLS)으로 본인 것만 접근 가능.
+  const SUPABASE_URL = "https://qqwkjemfxlixmdkvfcju.supabase.co";
+  const SUPABASE_KEY = "sb_publishable_lsBpp30OIsuAEI7_NcafsQ_6IBkYa4W";
+  const sb = window.supabase?.createClient(SUPABASE_URL, SUPABASE_KEY);
+  const LISTS = {
+    favorite: { on: "⭐", off: "☆", label: "즐겨찾기" },
+    wishlist: { on: "🚩", off: "⚑", label: "가고 싶은 곳" },
+  };
+  const LOCAL_KEY = "nojicamp.saved.v1";
+  const placeById = new Map((window.CAMPSITES?.features || []).map((f) => [f.properties.id, f]));
+  const saved = { favorite: new Map(), wishlist: new Map() }; // id -> { name, lon, lat }
+  let user = null;
+
+  const userBtn = document.getElementById("userBtn");
+  const listBtn = document.getElementById("listBtn");
+  const userDialog = document.getElementById("userDialog");
+  const listDialog = document.getElementById("listDialog");
+
+  function readLocal() {
+    try { return JSON.parse(localStorage.getItem(LOCAL_KEY)) || {}; } catch { return {}; }
+  }
+  function writeLocal() {
+    try {
+      localStorage.setItem(LOCAL_KEY, JSON.stringify({ favorite: [...saved.favorite], wishlist: [...saved.wishlist] }));
+    } catch { /* 저장소를 못 쓰는 브라우저면 이번 방문 동안만 유지 */ }
+  }
+  function loadLocal() {
+    const d = readLocal();
+    for (const l of Object.keys(LISTS)) saved[l] = new Map(d[l] || []);
+  }
+
+  async function loadRemote() {
+    const { data, error } = await sb.from("saved_places")
+      .select("place_id, list, name, lon, lat").order("created_at", { ascending: false });
+    if (error) { console.error("목록 불러오기 실패", error); return; }
+    for (const l of Object.keys(LISTS)) saved[l] = new Map();
+    for (const r of data) saved[r.list]?.set(r.place_id, { name: r.name, lon: r.lon, lat: r.lat });
+  }
+
+  // 로그인 전에 이 기기에 저장해 둔 목록을 계정으로 옮김
+  async function migrateLocal() {
+    const d = readLocal();
+    const rows = [];
+    for (const l of Object.keys(LISTS)) {
+      for (const [id, v] of d[l] || []) rows.push({ place_id: id, list: l, name: v.name, lon: v.lon, lat: v.lat });
+    }
+    if (!rows.length) return;
+    const { error } = await sb.from("saved_places")
+      .upsert(rows, { onConflict: "user_id,place_id,list", ignoreDuplicates: true });
+    if (error) { console.error("기기 목록 옮기기 실패", error); return; }
+    try { localStorage.removeItem(LOCAL_KEY); } catch { /* 무시 */ }
+  }
+
+  // 화면을 먼저 바꾸고 저장. 실패하면 되돌림
+  async function toggleSaved(list, id) {
+    const f = placeById.get(id);
+    if (!f) return;
+    const m = saved[list];
+    const had = m.has(id);
+    const v = { name: f.properties.name, lon: f.geometry.coordinates[0], lat: f.geometry.coordinates[1] };
+    had ? m.delete(id) : m.set(id, v);
+    if (!user) { writeLocal(); return; }
+    const { error } = had
+      ? await sb.from("saved_places").delete().match({ place_id: id, list })
+      : await sb.from("saved_places").insert({ place_id: id, list, ...v });
+    if (error) {
+      had ? m.set(id, v) : m.delete(id);
+      console.error("저장 실패", error);
+      alert("저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
+    }
+  }
+
+  function paintSaveBtns(root) {
+    root?.querySelectorAll(".save-btns").forEach((box) => {
+      box.querySelectorAll("button[data-list]").forEach((b) => {
+        const l = b.dataset.list, on = saved[l].has(box.dataset.id);
+        b.classList.toggle("on", on);
+        b.textContent = `${on ? LISTS[l].on : LISTS[l].off} ${LISTS[l].label}`;
+      });
+    });
+  }
+
+  map.on("popupopen", (e) => {
+    const el = e.popup.getElement();
+    paintSaveBtns(el);
+    el.querySelectorAll(".save-btns button[data-list]").forEach((b) => {
+      b.onclick = async () => {
+        const job = toggleSaved(b.dataset.list, b.closest(".save-btns").dataset.id);
+        paintSaveBtns(el);
+        await job;
+        paintSaveBtns(el);
+      };
+    });
+  });
+
+  function openPlace(id) {
+    const f = placeById.get(id);
+    if (!f) return;
+    const key = f.properties.fee === "free" ? "free" : "green";
+    const [lon, lat] = f.geometry.coordinates;
+    map.setView([lat, lon], 15);
+    L.popup().setLatLng([lat, lon]).setContent(popupHtml({ ...f.properties, status: key, lon, lat })).openOn(map);
+  }
+
+  function renderUserBtn() {
+    if (user) {
+      const pic = user.user_metadata?.avatar_url;
+      userBtn.innerHTML = pic ? `<img src="${escapeHtml(pic)}" alt="" referrerpolicy="no-referrer">` : "🙂";
+      userBtn.title = "내 계정";
+    } else {
+      userBtn.textContent = "👤";
+      userBtn.title = "로그인";
+    }
+  }
+
+  function openUserDialog() {
+    if (!sb) { alert("로그인 기능을 불러오지 못했어요. 잠시 후 다시 시도해 주세요."); return; }
+    userDialog.innerHTML = user ? `
+      <h2>내 계정</h2>
+      <p>${escapeHtml(user.user_metadata?.full_name || "")}<br><span class="muted">${escapeHtml(user.email || "")}</span></p>
+      <p class="muted">⭐ 즐겨찾기 ${saved.favorite.size}곳 · 🚩 가고 싶은 곳 ${saved.wishlist.size}곳<br>
+        회원 탈퇴는 <a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>의 문의처로 요청해 주세요.</p>
+      <div class="row-btns"><button data-act="close">닫기</button><button data-act="logout">로그아웃</button></div>` : `
+      <h2>로그인</h2>
+      <p class="muted">로그인하면 즐겨찾기와 가고 싶은 곳을 휴대폰·PC 어디서나 볼 수 있어요.
+        지금 이 기기에 저장한 목록도 계정으로 옮겨져요.</p>
+      <button class="google-btn" data-act="google"><b style="color:#4285f4">G</b> 구글로 로그인</button>
+      <p class="muted">로그인하면 이메일·이름·프로필 사진을 받아 목록 저장에만 사용합니다.
+        <a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a></p>
+      <div class="row-btns"><button data-act="close">닫기</button></div>`;
+    userDialog.showModal();
+  }
+
+  let listTab = "favorite";
+  function renderList() {
+    const items = [...saved[listTab]].map(([id, v]) => `
+      <li><button class="go" data-go="${escapeHtml(id)}">${escapeHtml(v.name)}
+        <small>${escapeHtml(placeById.get(id)?.properties.addr || "")}</small></button>
+        <button class="del" data-del="${escapeHtml(id)}">삭제</button></li>`).join("");
+    listDialog.innerHTML = `
+      <h2>내 목록</h2>
+      <div class="tabs">${Object.entries(LISTS).map(([k, v]) =>
+        `<button data-tab="${k}" class="${k === listTab ? "on" : ""}">${v.on} ${v.label} ${saved[k].size}</button>`).join("")}</div>
+      <ul class="saved-list">${items || `<li class="muted">아직 없어요. 지도에서 장소를 누르고 ${LISTS[listTab].off} ${LISTS[listTab].label} 버튼을 눌러 보세요.</li>`}</ul>
+      ${user ? "" : `<p class="muted">지금은 이 기기에만 저장돼요. 👤 로그인하면 다른 기기에서도 볼 수 있어요.</p>`}
+      <div class="row-btns"><button data-act="close">닫기</button></div>`;
+  }
+
+  userBtn.addEventListener("click", openUserDialog);
+  listBtn.addEventListener("click", () => { renderList(); listDialog.showModal(); });
+
+  userDialog.addEventListener("click", async (e) => {
+    if (e.target === userDialog) { userDialog.close(); return; } // 바깥(배경) 클릭
+    const act = e.target.closest("[data-act]")?.dataset.act;
+    if (act === "close") userDialog.close();
+    if (act === "logout") { await sb.auth.signOut(); userDialog.close(); }
+    if (act === "google") {
+      await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname } });
+    }
+  });
+
+  listDialog.addEventListener("click", async (e) => {
+    if (e.target === listDialog) { listDialog.close(); return; }
+    const t = e.target.closest("button");
+    if (!t) return;
+    if (t.dataset.act === "close") listDialog.close();
+    if (t.dataset.tab) { listTab = t.dataset.tab; renderList(); }
+    if (t.dataset.go) { listDialog.close(); openPlace(t.dataset.go); }
+    if (t.dataset.del) { await toggleSaved(listTab, t.dataset.del); renderList(); }
+  });
+
+  async function onSession(session) {
+    const next = session?.user || null;
+    if ((next?.id || null) === (user?.id || null)) return;
+    user = next;
+    if (user) { await migrateLocal(); await loadRemote(); } else { loadLocal(); }
+    renderUserBtn();
+    if (listDialog.open) renderList();
+    paintSaveBtns(document.querySelector(".leaflet-popup"));
+  }
+
+  loadLocal();
+  renderUserBtn();
+  // onAuthStateChange 안에서 바로 Supabase 를 호출하면 멈출 수 있어 다음 틱으로 미룸
+  sb?.auth.onAuthStateChange((_event, session) => setTimeout(() => onSession(session), 0));
 })();
