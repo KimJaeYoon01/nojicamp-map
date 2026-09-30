@@ -81,20 +81,22 @@
   }
 
   // 야영장: 멀리서는 점, 가까이(AREA_ZOOM 이상)에서는 지적도 필지 경계(면)
+  // 면 데이터는 data/camp_areas/ 격자 파일로 따로 있어 가까이 볼 때 그 지역 것만 받음
   const AREA_ZOOM = 14;
-  const campPts = [];
-  const campAreas = [];
+  const campPts = [];                 // { id, layer, group }
+  const campAreaById = new Map();     // id -> { layer, group } (불러온 면만)
+  const campById = new Map();         // id -> 야영장 피처
+  const campPopup = (f) => () => {    // 팝업 HTML 은 열 때 생성 (3천여 개를 미리 만들지 않음)
+    const key = f.properties.fee === "free" ? "free" : "green";
+    const [lon, lat] = f.geometry.coordinates;
+    return popupHtml({ ...f.properties, status: key, lon, lat });
+  };
   for (const f of window.CAMPSITES?.features || []) {
     const key = f.properties.fee === "free" ? "free" : "green";
     const [lon, lat] = f.geometry.coordinates;
-    const p = { ...f.properties, status: key, lon, lat };
-    const pt = L.circleMarker([lat, lon], { ...styleFor(key), radius: 7, fillOpacity: 1 })
-      .bindPopup(popupHtml(p));
-    campPts.push({ layer: pt, group: groups[key], hasArea: !!p.area });
-    if (p.area) {
-      const area = L.geoJSON(p.area, { style: () => styleFor(key) }).bindPopup(popupHtml(p));
-      campAreas.push({ layer: area, group: groups[key] });
-    }
+    const pt = L.circleMarker([lat, lon], { ...styleFor(key), radius: 7, fillOpacity: 1 }).bindPopup(campPopup(f));
+    campPts.push({ id: f.properties.id, layer: pt, group: groups[key] });
+    campById.set(f.properties.id, f);
   }
   // 멀리서 볼수록 점을 작게 (전국 화면에서 3천여 개 점이 지도를 덮지 않도록)
   function dotSize(z) {
@@ -113,19 +115,53 @@
   map.on("zoomend", resizeDots);
   resizeDots();
 
+  // 가까이 보면 면이 있는 야영장은 점 대신 면을 보여줌 (면을 아직 못 받았으면 점 유지)
   let areaMode = null;
-  function updateCamps() {
-    const mode = map.getZoom() >= AREA_ZOOM;
-    if (mode === areaMode) return;
-    areaMode = mode;
+  function syncCamps() {
     for (const c of campPts) {
-      if (mode && c.hasArea) c.group.removeLayer(c.layer);
+      const area = areaMode && campAreaById.get(c.id);
+      if (area) { c.group.removeLayer(c.layer); area.group.addLayer(area.layer); }
       else c.group.addLayer(c.layer);
     }
-    for (const a of campAreas) mode ? a.group.addLayer(a.layer) : a.group.removeLayer(a.layer);
+    if (!areaMode) for (const a of campAreaById.values()) a.group.removeLayer(a.layer);
     reorder();
   }
+  function updateCamps() {
+    const mode = map.getZoom() >= AREA_ZOOM;
+    if (mode !== areaMode) { areaMode = mode; syncCamps(); }
+    if (mode) loadCampAreas();
+  }
+
+  let areaIndex = null;
+  const areaRequested = new Set();
+  async function loadCampAreas() {
+    if (!areaIndex) {
+      areaIndex = fetch("data/camp_areas/index.json").then((r) => r.json())
+        .then((d) => ({ ...d, cellSet: new Set(d.cells) })).catch(() => null);
+    }
+    const idx = await areaIndex;
+    if (!idx || !areaMode) return;
+    const b = map.getBounds().pad(0.2), c = idx.cell;
+    for (let x = Math.floor(b.getWest() / c); x <= Math.floor(b.getEast() / c); x++) {
+      for (let y = Math.floor(b.getSouth() / c); y <= Math.floor(b.getNorth() / c); y++) {
+        const key = `${x}_${y}`;
+        if (!idx.cellSet.has(key) || areaRequested.has(key)) continue;
+        areaRequested.add(key);
+        fetch(`data/camp_areas/${key}.json`).then((r) => r.json()).then((areas) => {
+          for (const [id, geom] of Object.entries(areas)) {
+            const f = campById.get(id);
+            if (!f || campAreaById.has(id)) continue;
+            const status = f.properties.fee === "free" ? "free" : "green";
+            const layer = L.geoJSON(geom, { style: () => styleFor(status) }).bindPopup(campPopup(f));
+            campAreaById.set(id, { layer, group: groups[status] });
+          }
+          if (areaMode) syncCamps();
+        }).catch((e) => { areaRequested.delete(key); console.error("야영장 면 불러오기 실패", key, e); });
+      }
+    }
+  }
   map.on("zoomend", updateCamps);
+  map.on("moveend", () => { if (areaMode) loadCampAreas(); });
   updateCamps();
 
   // 레이어 켜고 끄기 (구역 표시 체크박스)
@@ -159,6 +195,15 @@
   const detailRequested = new Set();
   const detailDrawn = new Set(); // 격자 경계에 걸친 구역 중복 방지 (피처 id)
   let pending = 0;
+  const cellFiles = new Map(); // key -> Promise(상세본). 지도 표시·위치 판정·제보가 함께 씀
+  function getCell(key) {
+    if (!cellFiles.has(key)) {
+      const job = getJSON(`data/zones/d/${key}.json`);
+      job.catch(() => cellFiles.delete(key)); // 실패하면 다음에 다시 시도
+      cellFiles.set(key, job);
+    }
+    return cellFiles.get(key);
+  }
 
   function updateLoading() {
     setStatus(pending ? `구역 불러오는 중… (${pending})` : "");
@@ -197,9 +242,9 @@
         const key = `${x}_${y}`;
         if (!zoneIndex.cellSet.has(key) || detailRequested.has(key)) continue;
         detailRequested.add(key);
-        getJSON(`data/zones/d/${key}.json`).then((fc) => {
-          fc.features = fc.features.filter((f) => !detailDrawn.has(f.id) && detailDrawn.add(f.id));
-          addZones(fc, zoneDetail, zoneIndex.info);
+        getCell(key).then((fc) => {
+          const fresh = { type: "FeatureCollection", features: fc.features.filter((f) => !detailDrawn.has(f.id) && detailDrawn.add(f.id)) };
+          addZones(fresh, zoneDetail, zoneIndex.info);
           reorder();
         }).catch((e) => {
           detailRequested.delete(key); // 실패한 칸은 다음 이동 때 다시 시도
@@ -226,7 +271,6 @@
   // ---- 내 위치 (GPS) ----
   // 버튼을 누르면 위치를 계속 따라가며, 선 곳의 구역과 가까운 야영장을 알려줌
   const locCard = document.getElementById("locCard");
-  const cellCache = new Map(); // 구역 판정용 상세본 (지도 표시와 별개로 내 위치 칸만 받음)
   let myDot = null, myCircle = null, watchId = null, firstFix = true, lastCheck = null;
 
   function pointInRing(x, y, ring) {
@@ -246,8 +290,7 @@
     if (!zoneIndex) return [];
     const key = `${Math.floor(lon / zoneIndex.cell)}_${Math.floor(lat / zoneIndex.cell)}`;
     if (!zoneIndex.cellSet.has(key)) return [];
-    if (!cellCache.has(key)) cellCache.set(key, fetch(`data/zones/d/${key}.json`).then((r) => r.json()));
-    const fc = await cellCache.get(key);
+    const fc = await getCell(key);
     return fc.features
       .filter((f) => pointInGeom(lon, lat, f.geometry))
       .map((f) => ({ status: f.properties.s, name: f.properties.n, law: zoneIndex.info[f.properties.k].law }));
@@ -451,9 +494,10 @@
   const searchInput = document.getElementById("searchInput");
   const searchList = document.getElementById("searchResults");
   const norm = (t) => String(t || "").replace(/\s+/g, "").toLowerCase();
-  const campIndex = (window.CAMPSITES?.features || []).map((f) => ({
-    f, key: norm(f.properties.name) + "|" + norm(f.properties.addr),
-  }));
+  const campIndex = (window.CAMPSITES?.features || []).map((f) => {
+    const nk = norm(f.properties.name);
+    return { f, nk, key: nk + "|" + norm(f.properties.addr), free: f.properties.fee === "free" };
+  });
   let results = [], activeIdx = -1, placeSeq = 0;
 
   function localMatches(q) {
@@ -461,8 +505,7 @@
     if (k.length < 1) return [];
     const hits = campIndex.filter((c) => c.key.includes(k));
     // 이름에서 맞은 것 먼저, 무료 노지 먼저
-    hits.sort((a, b) => (norm(b.f.properties.name).includes(k) - norm(a.f.properties.name).includes(k))
-      || ((b.f.properties.fee === "free") - (a.f.properties.fee === "free")));
+    hits.sort((a, b) => (b.nk.includes(k) - a.nk.includes(k)) || (b.free - a.free));
     return hits.slice(0, 8).map((c) => ({ type: "camp", f: c.f }));
   }
 
@@ -513,10 +556,7 @@
     searchList.hidden = true;
     searchInput.blur();
     if (r.type === "camp") {
-      const p = r.f.properties, key = p.fee === "free" ? "free" : "green";
-      const [lon, lat] = r.f.geometry.coordinates;
-      map.setView([lat, lon], 15);
-      L.popup().setLatLng([lat, lon]).setContent(popupHtml({ ...p, status: key, lon, lat })).openOn(map);
+      openPlace(r.f.properties.id);
     } else if (r.bbox) {
       const [s, n, w, e] = r.bbox;
       map.fitBounds([[s, w], [n, e]], { maxZoom: 15 });
@@ -565,8 +605,7 @@
     favorite: { on: "⭐", off: "☆", label: "즐겨찾기" },
     wishlist: { on: "🚩", off: "⚑", label: "가고 싶은 곳" },
   };
-  const LOCAL_KEY = "nojicamp.saved.v1";
-  const placeById = new Map((window.CAMPSITES?.features || []).map((f) => [f.properties.id, f]));
+  const placeById = campById;
   const saved = { favorite: new Map(), wishlist: new Map() }; // id -> { name, lon, lat }
   let user = null;
 
@@ -575,30 +614,12 @@
   const userDialog = document.getElementById("userDialog");
   const listDialog = document.getElementById("listDialog");
 
-  function readLocal() {
-    try { return JSON.parse(localStorage.getItem(LOCAL_KEY)) || {}; } catch { return {}; }
-  }
-
   async function loadRemote() {
     const { data, error } = await sb.from("saved_places")
       .select("place_id, list, name, lon, lat").order("created_at", { ascending: false });
     if (error) { console.error("목록 불러오기 실패", error); return; }
     for (const l of Object.keys(LISTS)) saved[l] = new Map();
     for (const r of data) saved[r.list]?.set(r.place_id, { name: r.name, lon: r.lon, lat: r.lat });
-  }
-
-  // 로그인 전에 이 기기에 저장해 둔 목록을 계정으로 옮김
-  async function migrateLocal() {
-    const d = readLocal();
-    const rows = [];
-    for (const l of Object.keys(LISTS)) {
-      for (const [id, v] of d[l] || []) rows.push({ place_id: id, list: l, name: v.name, lon: v.lon, lat: v.lat });
-    }
-    if (!rows.length) return;
-    const { error } = await sb.from("saved_places")
-      .upsert(rows, { onConflict: "user_id,place_id,list", ignoreDuplicates: true });
-    if (error) { console.error("기기 목록 옮기기 실패", error); return; }
-    try { localStorage.removeItem(LOCAL_KEY); } catch { /* 무시 */ }
   }
 
   // 화면을 먼저 바꾸고 저장. 실패하면 되돌림
@@ -701,7 +722,7 @@
       <p class="muted">로그인하면 이메일·이름(닉네임)·프로필 사진을 받아 목록 저장에만 사용합니다.
         <a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a></p>
       <div class="row-btns"><button data-act="close">닫기</button></div>`;
-    userDialog.showModal();
+    if (!userDialog.open) userDialog.showModal();
   }
 
   let listTab = "favorite";
@@ -727,7 +748,7 @@
   }
 
   userBtn.addEventListener("click", () => openUserDialog());
-  listBtn.addEventListener("click", () => { renderList(); listDialog.showModal(); });
+  listBtn.addEventListener("click", () => { renderList(); if (!listDialog.open) listDialog.showModal(); });
 
   userDialog.addEventListener("click", async (e) => {
     if (e.target === userDialog) { userDialog.close(); return; } // 바깥(배경) 클릭
@@ -767,7 +788,6 @@
     if ((next?.id || null) === (user?.id || null)) return;
     user = next;
     if (user) {
-      await migrateLocal(); // 예전 버전에서 기기에 저장해 둔 목록이 있으면 계정으로 옮김
       await loadRemote();
     } else {
       for (const l of Object.keys(LISTS)) saved[l] = new Map();
@@ -912,7 +932,7 @@
       const go = e.target.closest("[data-go]");
       if (go) { reviewDialog.close(); openPlace(go.dataset.go); }
     };
-    reviewDialog.showModal();
+    if (!reviewDialog.open) reviewDialog.showModal();
   }
   // 한국 시간(기기 시간) 기준 오늘 날짜 YYYY-MM-DD (toISOString 은 UTC 라 새벽에 하루 전이 됨)
   function todayLocal() {
@@ -958,7 +978,7 @@
       reviewDialog.close();
       loadReviewBox(box, true).then(() => keepPopupInView(map._popup));
     };
-    reviewDialog.showModal();
+    if (!reviewDialog.open) reviewDialog.showModal();
   }
 
   function openReportForm(reviewId) {
@@ -980,7 +1000,7 @@
       else if (error) { alert("신고하지 못했어요."); console.error(error); }
       else alert("신고가 접수됐어요. 확인 후 조치할게요.");
     };
-    reviewDialog.showModal();
+    if (!reviewDialog.open) reviewDialog.showModal();
   }
 
   map.on("popupopen", (e) => {

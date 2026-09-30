@@ -153,8 +153,6 @@ dialog.sheet .row-btns { display: flex; gap: 8px; justify-content: flex-end; mar
 dialog.sheet button { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg);
   color: var(--fg); cursor: pointer; font-size: 14px; }
 dialog.sheet button.primary { background: #2b8a3e; border-color: #2b8a3e; color: #fff; font-weight: 700; }
-.google-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
-  padding: 10px !important; font-weight: 600; }
 .sheet .muted { color: var(--muted); font-size: 12px; line-height: 1.5; }
 .tabs { display: flex; gap: 6px; margin-bottom: 10px; }
 .tabs button.on { background: #1c7ed6; border-color: #1c7ed6; color: #fff; }
