@@ -340,4 +340,114 @@
     watchId = navigator.geolocation.watchPosition(onPosition, onPosError,
       { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
   });
+  // ---- 검색 ----
+  // 입력하는 대로 야영장(이름·주소) 목록, Enter 를 누르면 지역·주소 검색(OpenStreetMap Nominatim)
+  const searchForm = document.getElementById("searchForm");
+  const searchInput = document.getElementById("searchInput");
+  const searchList = document.getElementById("searchResults");
+  const norm = (t) => String(t || "").replace(/\s+/g, "").toLowerCase();
+  const campIndex = (window.CAMPSITES?.features || []).map((f) => ({
+    f, key: norm(f.properties.name) + "|" + norm(f.properties.addr),
+  }));
+  let results = [], activeIdx = -1, placeSeq = 0;
+
+  function localMatches(q) {
+    const k = norm(q);
+    if (k.length < 1) return [];
+    const hits = campIndex.filter((c) => c.key.includes(k));
+    // 이름에서 맞은 것 먼저, 무료 노지 먼저
+    hits.sort((a, b) => (norm(b.f.properties.name).includes(k) - norm(a.f.properties.name).includes(k))
+      || ((b.f.properties.fee === "free") - (a.f.properties.fee === "free")));
+    return hits.slice(0, 8).map((c) => ({ type: "camp", f: c.f }));
+  }
+
+  function renderResults(places, placeState) {
+    const camps = localMatches(searchInput.value);
+    results = [...camps, ...places];
+    activeIdx = -1;
+    const rows = [];
+    if (camps.length) rows.push(`<li class="sr-head">야영장</li>`);
+    camps.forEach((r, i) => {
+      const p = r.f.properties, key = p.fee === "free" ? "free" : "green";
+      rows.push(`<li data-i="${i}"><span class="sr-dot" style="background:${COLORS[key]}"></span>${escapeHtml(p.name)}
+        <span class="sr-sub">${escapeHtml(LABELS[key])} · ${escapeHtml(p.addr || "")}</span></li>`);
+    });
+    if (placeState === "loading") rows.push(`<li class="sr-head">지역 검색 중…</li>`);
+    if (places.length) rows.push(`<li class="sr-head">지역·주소</li>`);
+    places.forEach((r, j) => {
+      rows.push(`<li data-i="${camps.length + j}">📍 ${escapeHtml(r.name)}<span class="sr-sub">${escapeHtml(r.sub)}</span></li>`);
+    });
+    if (!camps.length && !places.length && placeState !== "loading") {
+      rows.push(`<li class="sr-head">${searchInput.value.trim() ? "Enter 를 누르면 지역·주소를 검색합니다" : ""}</li>`);
+    }
+    searchList.innerHTML = rows.join("");
+    searchList.hidden = !searchInput.value.trim();
+  }
+
+  async function searchPlaces(q) {
+    const seq = ++placeSeq;
+    renderResults([], "loading");
+    try {
+      const url = "https://nominatim.openstreetmap.org/search?" + new URLSearchParams({
+        q, format: "jsonv2", countrycodes: "kr", limit: "6", "accept-language": "ko",
+      });
+      const data = await (await fetch(url)).json();
+      if (seq !== placeSeq) return; // 그 사이 다른 검색을 했으면 무시
+      renderResults(data.map((d) => ({
+        type: "place", name: d.name || d.display_name.split(",")[0],
+        sub: d.display_name.split(",").slice(1, 4).join(",").trim(),
+        lat: +d.lat, lon: +d.lon, bbox: d.boundingbox?.map(Number),
+      })), "done");
+    } catch (e) {
+      if (seq === placeSeq) renderResults([], "done");
+      console.error("지역 검색 실패", e);
+    }
+  }
+
+  function choose(r) {
+    searchList.hidden = true;
+    searchInput.blur();
+    if (r.type === "camp") {
+      const p = r.f.properties, key = p.fee === "free" ? "free" : "green";
+      const [lon, lat] = r.f.geometry.coordinates;
+      map.setView([lat, lon], 15);
+      L.popup().setLatLng([lat, lon]).setContent(popupHtml({ ...p, status: key, lon, lat })).openOn(map);
+    } else if (r.bbox) {
+      const [s, n, w, e] = r.bbox;
+      map.fitBounds([[s, w], [n, e]], { maxZoom: 15 });
+    } else {
+      map.setView([r.lat, r.lon], 14);
+    }
+  }
+
+  let typingTimer;
+  searchInput.addEventListener("input", () => {
+    clearTimeout(typingTimer);
+    placeSeq++; // 입력이 바뀌면 진행 중인 지역 검색 결과는 버림
+    typingTimer = setTimeout(() => renderResults([], "idle"), 120);
+  });
+  searchInput.addEventListener("focus", () => { if (searchInput.value.trim()) renderResults([], "idle"); });
+  searchInput.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!results.length) return;
+      activeIdx = (activeIdx + (e.key === "ArrowDown" ? 1 : -1) + results.length) % results.length;
+      searchList.querySelectorAll("li[data-i]").forEach((li) => li.classList.toggle("active", +li.dataset.i === activeIdx));
+    } else if (e.key === "Escape") {
+      searchList.hidden = true;
+    }
+  });
+  searchForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (activeIdx >= 0) { choose(results[activeIdx]); return; }
+    const q = searchInput.value.trim();
+    if (q) searchPlaces(q);
+  });
+  searchList.addEventListener("mousedown", (e) => {
+    const li = e.target.closest("li[data-i]");
+    if (!li) return;
+    e.preventDefault(); // 입력창 blur 로 목록이 먼저 닫히지 않게
+    choose(results[+li.dataset.i]);
+  });
+  searchInput.addEventListener("blur", () => setTimeout(() => { searchList.hidden = true; }, 150));
 })();

@@ -8,11 +8,15 @@
   <meta name="copyright" content="© 2026 KimJaeYoon01. All rights reserved.">
   <meta name="description" content="대한민국 법령 기준 노지캠핑 금지·주의·허용 구역 지도">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <link rel="stylesheet" href="css/style.css?v=202609301536">
+  <link rel="stylesheet" href="css/style.css?v=202609301540">
 </head>
 <body>
   <header class="topbar">
-    <h1>⛺ 노지캠핑 지도</h1>
+    <h1>⛺ <span class="title-text">노지캠핑 지도</span></h1>
+    <form class="search" id="searchForm" role="search" autocomplete="off">
+      <input id="searchInput" type="search" placeholder="야영장·지역 검색" aria-label="야영장 또는 지역 검색">
+      <ul class="search-results" id="searchResults" hidden></ul>
+    </form>
     <button id="infoBtn" class="icon-btn" aria-label="안내">?</button>
   </header>
 
@@ -49,13 +53,13 @@
       <li><b>연두</b>: 직접 모은 무료 노지 장소. 금지 구역 밖인 곳만 표시하지만 공식 허용지는 아니므로 현장 안내판·지자체 공지를 확인하세요</li>
     </ul>
     <p>어디서든 쓰레기 투기·불법 취사(불 피우기)는 경범죄처벌법·산림보호법 등으로 처벌될 수 있습니다.</p>
-    <p class="credits">데이터 출처: 브이월드(국토교통부 등), 공공데이터포털(국립공원공단·산림청·한국관광공사 고캠핑), OpenStreetMap. 공공데이터는 각 기관의 이용 조건(공공누리 등)을 따릅니다.<br>
+    <p class="credits">데이터 출처: 브이월드(국토교통부 등), 공공데이터포털(국립공원공단·산림청·한국관광공사 고캠핑), OpenStreetMap(배경지도·지역 검색 Nominatim). 공공데이터는 각 기관의 이용 조건(공공누리 등)을 따릅니다.<br>
     지도 구성·분류·코드 © 2026 KimJaeYoon01. 무단 복제·수정·재배포를 금지합니다.</p>
     <form method="dialog"><button>닫기</button></form>
   </dialog>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-  <script src="js/campsites.js?v=202609301536"></script>
-  <script src="js/app.js?v=202609301536"></script>
+  <script src="js/campsites.js?v=202609301540"></script>
+  <script src="js/app.js?v=202609301540"></script>
 </body>
 </html>
