@@ -214,3 +214,8 @@ dialog.sheet button.primary { background: #2b8a3e; border-color: #2b8a3e; color:
 .rv-tagpick input { position: absolute; opacity: 0; }
 .rv-tagpick span { display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); font-size: 13px; cursor: pointer; }
 .rv-tagpick input:checked + span { background: #d3f9d8; border-color: #2b8a3e; color: #1c1f23; font-weight: 700; }
+.rv-nick { border: 0; background: none; padding: 0; font: inherit; font-weight: 700; color: inherit;
+  cursor: pointer; text-decoration: underline dotted; }
+.linkish { border: 0 !important; background: none !important; padding: 0 4px !important; color: #1c7ed6 !important;
+  font-size: 12px !important; cursor: pointer; text-decoration: underline; }
+.camper-list .go { font-size: 14px; }

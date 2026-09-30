@@ -661,7 +661,10 @@
     }
     userDialog.innerHTML = user ? `
       <h2>내 계정</h2>
-      <p>${escapeHtml(user.user_metadata?.full_name || "")}<br><span class="muted">${escapeHtml(user.email || "")}</span></p>
+      <p>🏕 <b>${escapeHtml(myProfile?.nickname || "")}</b>
+        <button class="linkish" data-act="nick">닉네임 변경</button>
+        <button class="linkish" data-act="myreviews">내 후기 보기</button><br>
+        <span class="muted">${escapeHtml(user.email || "")}</span></p>
       <p class="muted">⭐ 즐겨찾기 ${saved.favorite.size}곳 · 🚩 가고 싶은 곳 ${saved.wishlist.size}곳<br>
         회원 탈퇴는 <a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>의 문의처로 요청해 주세요.</p>
       <div class="row-btns"><button data-act="close">닫기</button><button data-act="logout">로그아웃</button></div>` : `
@@ -706,6 +709,18 @@
     const act = e.target.closest("[data-act]")?.dataset.act;
     if (act === "close") userDialog.close();
     if (act === "logout") { await sb.auth.signOut(); userDialog.close(); }
+    if (act === "myreviews") { userDialog.close(); openCamperPage(user.id); }
+    if (act === "nick") {
+      const next = prompt("새 닉네임 (2~20자, 30일에 한 번 바꿀 수 있어요)", myProfile?.nickname || "");
+      if (next == null) return;
+      const nick = next.trim();
+      if (nick.length < 2 || nick.length > 20) { alert("닉네임은 2~20자로 정해 주세요."); return; }
+      const { error } = await sb.from("profiles").update({ nickname: nick }).eq("user_id", user.id);
+      if (error?.code === "23505") alert("이미 누가 쓰고 있는 닉네임이에요.");
+      else if (error?.code === "P0001") alert("닉네임은 30일에 한 번만 바꿀 수 있어요.");
+      else if (error) { alert("바꾸지 못했어요."); console.error(error); }
+      else { await loadMyProfile(); reviewCache.clear(); openUserDialog(); }
+    }
     if (act === "google" || act === "kakao") {
       await sb.auth.signInWithOAuth({ provider: act, options: { redirectTo: location.origin + location.pathname } });
     }
@@ -748,13 +763,16 @@
   let isAdmin = false;
   const reviewCache = new Map(); // place_id -> 후기 배열
 
+  const REVIEW_COLS = "id, place_id, user_id, rating, content, visited_on, tags, created_at, updated_at, profiles(nickname)";
+  const nickOf = (r) => r.profiles?.nickname || "캠퍼";
+  let myProfile = null; // { nickname, nickname_changed_at }
   const stars = (n) => "★".repeat(n) + "☆".repeat(5 - n);
   const fmtDate = (d) => (d ? String(d).slice(0, 10).replaceAll("-", ".") : "");
 
   async function fetchReviews(placeId, force = false) {
     if (!force && reviewCache.has(placeId)) return reviewCache.get(placeId);
     const { data, error } = await sb.from("reviews")
-      .select("id, place_id, user_id, nickname, rating, content, visited_on, tags, created_at, updated_at")
+      .select(REVIEW_COLS)
       .eq("place_id", placeId).order("created_at", { ascending: false }).limit(100);
     if (error) throw error;
     reviewCache.set(placeId, data);
@@ -770,7 +788,7 @@
     ].join("");
     return `<li class="rv">
       <div class="rv-head"><span class="rv-stars">${stars(r.rating)}</span>
-        <b>${escapeHtml(r.nickname)}</b>
+        <button class="rv-nick" data-rv="camper" data-uid="${escapeHtml(r.user_id)}" title="이 캠퍼의 후기 모두 보기">${escapeHtml(nickOf(r))}</button>
         <span class="muted">${r.visited_on ? `${fmtDate(r.visited_on)} 방문` : fmtDate(r.created_at)}</span></div>
       ${r.tags?.length ? `<div class="rv-tags">${r.tags.map((t) => `<span>${escapeHtml(t)}</span>`).join("")}</div>` : ""}
       <p class="rv-text">${escapeHtml(r.content)}</p>
@@ -814,6 +832,7 @@
     const act = b.dataset.rv;
     const list = reviewCache.get(placeId) || [];
     if (act === "more") { renderReviews(box, list, true); return; }
+    if (act === "camper") { openCamperPage(b.dataset.uid); return; }
     if (!user) {
       const name = placeById.get(placeId)?.properties.name || "이 장소";
       openUserDialog(`✍ <b>${escapeHtml(name)}</b> 후기를 쓰거나 신고하려면 로그인해 주세요.`);
@@ -829,16 +848,37 @@
     if (act === "report") openReportForm(+b.dataset.rid);
   }
 
-  // 닉네임: 마지막으로 쓴 닉네임 → 카카오·구글 이름 → "캠퍼"
-  const NICK_KEY = "nojicamp.nickname.v1";
-  function defaultNickname() {
-    let last = "";
-    try { last = localStorage.getItem(`${NICK_KEY}.${user?.id}`) || ""; } catch { /* 무시 */ }
-    const m = user?.user_metadata || {};
-    return (last || m.name || m.full_name || m.nickname || m.preferred_username || m.user_name || "캠퍼").slice(0, 30);
+  // 닉네임은 사람마다 하나로 고정 (profiles 표). 가입 때 자동 생성, 내 계정에서 30일에 한 번 변경
+  async function loadMyProfile() {
+    myProfile = null;
+    if (!user) return;
+    const { data, error } = await sb.from("profiles").select("nickname, nickname_changed_at").eq("user_id", user.id).maybeSingle();
+    if (error) console.error("프로필 불러오기 실패", error);
+    myProfile = data;
   }
-  function rememberNickname(nick) {
-    try { localStorage.setItem(`${NICK_KEY}.${user?.id}`, nick); } catch { /* 무시 */ }
+
+  // 한 캠퍼의 후기 모음 (취향 맞는 캠퍼 따라가기)
+  async function openCamperPage(uid) {
+    const { data, error } = await sb.from("reviews").select(REVIEW_COLS)
+      .eq("user_id", uid).order("created_at", { ascending: false }).limit(200);
+    if (error) { alert("불러오지 못했어요."); console.error(error); return; }
+    const nick = data[0] ? nickOf(data[0]) : "캠퍼";
+    const avg = data.length ? (data.reduce((a, r) => a + r.rating, 0) / data.length).toFixed(1) : "-";
+    reviewDialog.innerHTML = `
+      <h2>🏕 ${escapeHtml(nick)} 님의 후기</h2>
+      <p class="muted">후기 ${data.length}개 · 평균 별점 ${avg}</p>
+      <ul class="saved-list camper-list">${data.map((r) => `
+        <li><button class="go" data-go="${escapeHtml(r.place_id)}">
+          <span class="rv-stars">${stars(r.rating)}</span> ${escapeHtml(placeById.get(r.place_id)?.properties.name || "장소")}
+          <small>${r.visited_on ? `${fmtDate(r.visited_on)} 방문 · ` : ""}${escapeHtml(r.content.slice(0, 60))}${r.content.length > 60 ? "…" : ""}</small>
+        </button></li>`).join("") || `<li class="muted">아직 후기가 없어요.</li>`}</ul>
+      <div class="row-btns"><button data-act="close">닫기</button></div>`;
+    reviewDialog.onclick = (e) => {
+      if (e.target === reviewDialog || e.target.closest("[data-act=close]")) { reviewDialog.close(); return; }
+      const go = e.target.closest("[data-go]");
+      if (go) { reviewDialog.close(); openPlace(go.dataset.go); }
+    };
+    reviewDialog.showModal();
   }
   // 한국 시간(기기 시간) 기준 오늘 날짜 YYYY-MM-DD (toISOString 은 UTC 라 새벽에 하루 전이 됨)
   function todayLocal() {
@@ -848,7 +888,8 @@
 
   function openReviewForm(placeId, mine, box) {
     const name = placeById.get(placeId)?.properties.name || "";
-    const r = mine || { rating: 0, content: "", visited_on: todayLocal(), tags: [], nickname: defaultNickname() };
+    const r = mine || { rating: 0, content: "", visited_on: todayLocal(), tags: [] };
+    reviewDialog.onclick = (e) => { if (e.target === reviewDialog) reviewDialog.close(); };
     reviewDialog.innerHTML = `
       <form method="dialog" class="rv-form">
         <h2>✍ ${escapeHtml(name)} 후기</h2>
@@ -859,7 +900,8 @@
           placeholder="화장실·물·자리 상황, 분위기 등 다른 캠퍼에게 도움이 될 이야기를 남겨 주세요.">${escapeHtml(r.content)}</textarea>
         <label class="rv-field">방문한 날 <input type="date" name="visited_on" value="${escapeHtml(r.visited_on || "")}" max="${todayLocal()}"></label>
         <div class="rv-tagpick">${TAGS.map((t) => `<label><input type="checkbox" name="tags" value="${escapeHtml(t)}" ${r.tags?.includes(t) ? "checked" : ""}><span>${escapeHtml(t)}</span></label>`).join("")}</div>
-        <label class="rv-field">닉네임 <input name="nickname" maxlength="30" required value="${escapeHtml(r.nickname)}"></label>
+        <p class="rv-field">작성자 <b>${escapeHtml(myProfile?.nickname || "캠퍼")}</b>
+          <span class="muted">(닉네임은 👤 내 계정에서 바꿀 수 있어요)</span></p>
         <p class="muted">욕설·광고·개인정보가 담긴 후기는 삭제될 수 있어요. 닉네임과 후기 내용은 모두에게 공개돼요.</p>
         <div class="row-btns"><button value="cancel" formnovalidate>취소</button><button class="primary" value="ok">${mine ? "수정" : "등록"}</button></div>
       </form>`;
@@ -873,14 +915,12 @@
         content: String(fd.get("content")).trim(),
         visited_on: fd.get("visited_on") || null,
         tags: fd.getAll("tags"),
-        nickname: String(fd.get("nickname")).trim(),
         updated_at: new Date().toISOString(),
       };
       const { error } = mine
         ? await sb.from("reviews").update(row).eq("id", mine.id)
         : await sb.from("reviews").insert({ place_id: placeId, ...row });
       if (error) { alert("저장하지 못했어요. 잠시 후 다시 시도해 주세요."); console.error(error); return; }
-      rememberNickname(row.nickname);
       reviewDialog.close();
       loadReviewBox(box, true);
     };
@@ -888,6 +928,7 @@
   }
 
   function openReportForm(reviewId) {
+    reviewDialog.onclick = (e) => { if (e.target === reviewDialog) reviewDialog.close(); };
     reviewDialog.innerHTML = `
       <form method="dialog">
         <h2>🚩 후기 신고</h2>
@@ -907,7 +948,6 @@
     };
     reviewDialog.showModal();
   }
-  reviewDialog.addEventListener("click", (e) => { if (e.target === reviewDialog) reviewDialog.close(); });
 
   map.on("popupopen", (e) => {
     const box = e.popup.getElement().querySelector(".reviews");
@@ -919,6 +959,7 @@
   // 로그인 상태가 바뀌면 관리자 여부 확인, 열린 팝업 후기 다시 그림
   sb?.auth.onAuthStateChange((_event, session) => setTimeout(async () => {
     isAdmin = false;
+    await loadMyProfile();
     if (session?.user) {
       const { data } = await sb.rpc("is_admin");
       isAdmin = !!data;
