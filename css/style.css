@@ -255,3 +255,11 @@ dialog.sheet button.primary { background: #2b8a3e; border-color: #2b8a3e; color:
 #rankBtn { position: relative; }
 #rankBtn.has-news::after { content: ""; position: absolute; top: 1px; right: 1px; width: 9px; height: 9px;
   border-radius: 50%; background: #fa5252; border: 2px solid var(--panel); }
+
+/* ---- 휴대폰: 페이지 전체 확대 막기 (지도 확대는 Leaflet 이 직접 처리하므로 그대로 됨) ---- */
+html, body { overscroll-behavior: none; touch-action: pan-x pan-y; }
+.topbar, .panel, .loc-card, .disclaimer, dialog, .leaflet-control, .leaflet-popup { touch-action: manipulation; }
+@media (max-width: 600px) {
+  /* 아이폰은 16px 보다 작은 입력칸을 누르면 화면을 자동 확대함 */
+  input, textarea, select { font-size: 16px !important; }
+}

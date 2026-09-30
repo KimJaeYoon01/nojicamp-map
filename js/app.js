@@ -4,6 +4,10 @@
   const COLORS = { red: "#e03131", yellow: "#f2b705", green: "#0a5c26", free: "#82c91e" };
   const LABELS = { red: "금지", yellow: "확인 필요", green: "허용 · 유료", free: "무료 노지" };
 
+  // 아이폰 사파리는 확대 금지 설정을 무시하므로 두 손가락 확대 제스처를 직접 막음 (지도 확대는 터치 이벤트로 따로 동작)
+  ["gesturestart", "gesturechange", "gestureend"].forEach((t) =>
+    document.addEventListener(t, (e) => e.preventDefault(), { passive: false }));
+
   // 팝업이 열릴 때 위쪽 제목줄(48px)에 가리지 않게 여백을 두고 지도를 움직임
   L.Popup.mergeOptions({ autoPanPaddingTopLeft: L.point(16, 64), autoPanPaddingBottomRight: L.point(16, 16) });
   const map = L.map("map", { zoomControl: true }).setView([36.5, 127.8], 7);
