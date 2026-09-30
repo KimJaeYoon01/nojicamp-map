@@ -1021,4 +1021,94 @@
     const box = document.querySelector(".leaflet-popup .reviews");
     if (box) renderReviews(box, reviewCache.get(box.dataset.id) || []);
   }, 0));
+  // ---- 순위 (🏆) ----
+  // Supabase 함수 rank_saved / rank_reviews / rank_campers 로 "몇 번"만 셈 (누가 저장했는지는 안 드러남)
+  const rankDialog = document.getElementById("rankDialog");
+  const RANK_TABS = {
+    favorite: { label: "⭐ 즐겨찾기", unit: "명이 즐겨찾기" },
+    wishlist: { label: "🚩 가고 싶은 곳", unit: "명이 가고 싶어 해요" },
+    rating:   { label: "👍 별점 좋은 곳", unit: "" },
+    reviews:  { label: "✍ 후기 많은 곳", unit: "" },
+    campers:  { label: "🏕 활동 캠퍼", unit: "" },
+  };
+  const rankState = { tab: "favorite", days: null, freeOnly: false };
+  const rankCache = new Map();
+
+  async function fetchRank({ tab, days }) {
+    const key = `${tab}:${days}`;
+    if (rankCache.has(key)) return rankCache.get(key);
+    let q;
+    if (tab === "favorite" || tab === "wishlist") q = sb.rpc("rank_saved", { p_list: tab, p_days: days, p_limit: 100 });
+    else if (tab === "rating") q = sb.rpc("rank_reviews", { p_order: "rating", p_days: days, p_min: 2, p_limit: 100 });
+    else if (tab === "reviews") q = sb.rpc("rank_reviews", { p_order: "count", p_days: days, p_min: 1, p_limit: 100 });
+    else q = sb.rpc("rank_campers", { p_days: days, p_limit: 50 });
+    const { data, error } = await q;
+    if (error) throw error;
+    rankCache.set(key, data);
+    setTimeout(() => rankCache.delete(key), 60000); // 1분 뒤 새로 받음
+    return data;
+  }
+
+  const medal = (i) => ["🥇", "🥈", "🥉"][i] || `${i + 1}`;
+
+  async function renderRank() {
+    const { tab, days, freeOnly } = rankState;
+    rankDialog.innerHTML = `
+      <h2>🏆 순위</h2>
+      <div class="tabs rank-tabs">${Object.entries(RANK_TABS).map(([k, v]) =>
+        `<button data-rtab="${k}" class="${k === tab ? "on" : ""}">${v.label}</button>`).join("")}</div>
+      <div class="rank-filters">
+        <button data-days="" class="${days == null ? "on" : ""}">전체 기간</button>
+        <button data-days="30" class="${days === 30 ? "on" : ""}">최근 30일</button>
+        ${tab !== "campers" ? `<label><input type="checkbox" data-free ${freeOnly ? "checked" : ""}> 무료 노지만</label>` : ""}
+      </div>
+      <ol class="rank-list"><li class="muted">불러오는 중…</li></ol>
+      <div class="row-btns"><button data-act="close">닫기</button></div>`;
+    let rows;
+    try { rows = await fetchRank(rankState); } catch (e) {
+      console.error("순위 불러오기 실패", e);
+      rankDialog.querySelector(".rank-list").innerHTML = `<li class="muted">순위를 불러오지 못했어요.</li>`;
+      return;
+    }
+    if (rankState.tab !== tab || rankState.days !== days || rankState.freeOnly !== freeOnly) return; // 그 사이 탭 바뀜
+    let html;
+    if (tab === "campers") {
+      html = rows.map((r, i) => `
+        <li><span class="rank-no">${medal(i)}</span>
+          <button class="go" data-camper="${escapeHtml(r.user_id)}">🏕 ${escapeHtml(r.nickname)}
+            <small>후기 ${r.cnt}개 · 평균 ★ ${Number(r.avg_rating).toFixed(1)}</small></button></li>`).join("");
+    } else {
+      const list = rows.filter((r) => placeById.has(r.place_id))
+        .filter((r) => !freeOnly || placeById.get(r.place_id).properties.fee === "free").slice(0, 30);
+      html = list.map((r, i) => {
+        const p = placeById.get(r.place_id).properties;
+        const stat = tab === "rating" ? `★ ${Number(r.avg_rating).toFixed(1)} · 후기 ${r.cnt}개`
+          : tab === "reviews" ? `후기 ${r.cnt}개 · ★ ${Number(r.avg_rating).toFixed(1)}`
+          : `${r.cnt}${RANK_TABS[tab].unit}`;
+        return `<li><span class="rank-no">${medal(i)}</span>
+          <button class="go" data-go="${escapeHtml(r.place_id)}">
+            <span class="sr-dot" style="background:${COLORS[p.fee === "free" ? "free" : "green"]}"></span>${escapeHtml(p.name)}
+            <small>${escapeHtml(stat)} · ${escapeHtml(p.addr || "")}</small></button></li>`;
+      }).join("");
+    }
+    const empty = tab === "rating" ? "후기가 2개 이상 모인 장소가 아직 없어요." : "아직 데이터가 없어요. 첫 번째가 되어 보세요!";
+    rankDialog.querySelector(".rank-list").innerHTML = html || `<li class="muted">${empty}</li>`;
+  }
+
+  rankDialog.addEventListener("click", (e) => {
+    if (e.target === rankDialog) { rankDialog.close(); return; }
+    const t = e.target.closest("button, input");
+    if (!t) return;
+    if (t.dataset.act === "close") rankDialog.close();
+    if (t.dataset.rtab) { rankState.tab = t.dataset.rtab; renderRank(); }
+    if (t.dataset.days !== undefined) { rankState.days = t.dataset.days ? +t.dataset.days : null; renderRank(); }
+    if (t.hasAttribute("data-free")) { rankState.freeOnly = t.checked; renderRank(); }
+    if (t.dataset.go) { rankDialog.close(); openPlace(t.dataset.go); }
+    if (t.dataset.camper) { rankDialog.close(); openCamperPage(t.dataset.camper); }
+  });
+  document.getElementById("rankBtn").addEventListener("click", () => {
+    if (!sb) { alert("순위를 불러오지 못했어요."); return; }
+    renderRank();
+    if (!rankDialog.open) rankDialog.showModal();
+  });
 })();

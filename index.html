@@ -23,7 +23,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="apple-mobile-web-app-title" content="모닥">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <link rel="stylesheet" href="css/style.css?v=202610010507">
+  <link rel="stylesheet" href="css/style.css?v=202610010517">
 </head>
 <body>
   <header class="topbar">
@@ -32,6 +32,7 @@
       <input id="searchInput" type="search" placeholder="야영장·지역 검색" aria-label="야영장 또는 지역 검색">
       <ul class="search-results" id="searchResults" hidden></ul>
     </form>
+    <button id="rankBtn" class="icon-btn" aria-label="순위" title="순위">🏆</button>
     <button id="listBtn" class="icon-btn" aria-label="내 목록" title="내 목록">★</button>
     <button id="userBtn" class="icon-btn user-btn" aria-label="로그인" title="로그인">👤</button>
     <button id="infoBtn" class="icon-btn" aria-label="안내">?</button>
@@ -67,6 +68,7 @@
   <dialog id="userDialog" class="sheet"></dialog>
   <dialog id="listDialog" class="sheet"></dialog>
   <dialog id="reviewDialog" class="sheet"></dialog>
+  <dialog id="rankDialog" class="sheet rank-sheet"></dialog>
 
   <dialog id="infoDialog">
     <h2>이 지도에 대해</h2>
@@ -91,7 +93,7 @@
   <!-- 방문 통계 (GoatCounter: 쿠키 없음, 개인 식별 안 함. localhost 에서는 집계 안 됨) -->
   <script data-goatcounter="https://kimjaeyoon010208.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-  <script defer src="js/campsites.js?v=202610010507"></script>
-  <script defer src="js/app.js?v=202610010507"></script>
+  <script defer src="js/campsites.js?v=202610010517"></script>
+  <script defer src="js/app.js?v=202610010517"></script>
 </body>
 </html>

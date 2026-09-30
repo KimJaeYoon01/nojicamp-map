@@ -231,3 +231,19 @@ dialog.sheet button.primary { background: #2b8a3e; border-color: #2b8a3e; color:
   .panel .row input { width: 18px; height: 18px; margin: 0; }
   .loc-card, .disclaimer { bottom: 104px; }
 }
+
+/* 순위 */
+.rank-sheet { max-width: 460px; }
+.rank-tabs { flex-wrap: wrap; }
+.rank-tabs button { font-size: 13px !important; padding: 6px 10px !important; }
+.rank-filters { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 13px; flex-wrap: wrap; }
+.rank-filters button { padding: 4px 10px !important; font-size: 12px !important; border-radius: 999px !important; }
+.rank-filters button.on { background: #1c7ed6; border-color: #1c7ed6; color: #fff; }
+.rank-filters label { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.rank-list { list-style: none; margin: 0; padding: 0; max-height: 55vh; overflow-y: auto; }
+.rank-list li { display: flex; align-items: center; gap: 8px; padding: 7px 2px; border-bottom: 1px solid var(--border); }
+.rank-no { width: 28px; text-align: center; font-weight: 800; font-size: 15px; color: var(--muted); flex: none; }
+.rank-list .go { flex: 1; text-align: left; border: 0 !important; padding: 2px !important; background: none !important;
+  color: inherit; font-size: 14px; cursor: pointer; }
+.rank-list .go small { display: block; color: var(--muted); font-size: 12px; }
+@media (max-width: 600px) { .topbar .icon-btn { width: 30px; height: 30px; font-size: 14px; } }
