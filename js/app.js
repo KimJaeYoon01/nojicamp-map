@@ -126,19 +126,27 @@
   map.on("zoomend", updateCamps);
   updateCamps();
 
-  // 레이어 토글
-  document.querySelectorAll("[data-layer]").forEach((cb) => {
-    cb.addEventListener("change", () => {
-      const g = groups[cb.dataset.layer];
-      cb.checked ? g.addTo(map) : map.removeLayer(g);
-      // 다시 켜면 맨 위에 그려지므로 순서 복구
-      reorder();
+  // 레이어 켜고 끄기 (아래 칩)
+  document.querySelectorAll("#legend [data-layer]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const on = btn.getAttribute("aria-pressed") !== "true";
+      btn.setAttribute("aria-pressed", String(on));
+      const g = groups[btn.dataset.layer];
+      on ? g.addTo(map) : map.removeLayer(g);
+      reorder(); // 다시 켜면 맨 위에 그려지므로 순서 복구
     });
   });
 
-  // 안내 / 면책
+  // 안내 / 면책: 첫 방문에만 띄우고, 닫으면 기억 (내용은 ? 안내창에 항상 있음)
   document.getElementById("infoBtn").onclick = () => document.getElementById("infoDialog").showModal();
-  document.getElementById("closeDisc").onclick = () => document.getElementById("disclaimer").remove();
+  const DISC_KEY = "nojicamp.disclaimer.v1";
+  const disc = document.getElementById("disclaimer");
+  try { disc.hidden = localStorage.getItem(DISC_KEY) === "1"; } catch { disc.hidden = false; }
+  document.getElementById("closeDisc").onclick = () => {
+    disc.hidden = true;
+    try { localStorage.setItem(DISC_KEY, "1"); } catch { /* 무시 */ }
+  };
+  map.attributionControl.addAttribution('© 2026 모닥 · <a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a>');
 
   // ---- 빨강·노랑 구역 (scripts/build_zones.py 로 미리 만든 정적 파일) ----
   // 멀리서는 전국 요약본(overview.json), 가까이(detailZoom 이상)서는 격자별 상세본(d/X_Y.json)
@@ -275,14 +283,31 @@
       free && `무료 노지 <b>${escapeHtml(free.f.properties.name)}</b> ${fmtKm(free.d)}`,
       paid && `야영장 <b>${escapeHtml(paid.f.properties.name)}</b> ${fmtKm(paid.d)}`,
     ].filter(Boolean).join("<br>");
-    locCard.className = `loc-card ${cls}`;
+    const wasMin = locCard.classList.contains("min");
+    locCard.className = `loc-card ${cls}${wasMin ? " min" : ""}`;
     locCard.innerHTML = `<button class="loc-close" aria-label="닫기">✕</button>
-      <div class="loc-head">📍 ${escapeHtml(head)}</div>
+      <button class="loc-head" aria-label="카드 접기·펼치기">📍 ${escapeHtml(head)} <span class="loc-fold">${wasMin ? "▴" : "▾"}</span></button>
       <div class="loc-law">${escapeHtml(detail)}</div>
       <div class="loc-near">${near}</div>
       <div class="loc-acc">위치 오차 약 ${Math.round(acc)}m</div>`;
     locCard.hidden = false;
     locCard.querySelector(".loc-close").onclick = stopLocate;
+    locCard.querySelector(".loc-head").onclick = () => {
+      const min = locCard.classList.toggle("min");
+      locCard.querySelector(".loc-fold").textContent = min ? "▴" : "▾";
+    };
+    if (needLift) { needLift = false; liftDot(); }
+  }
+
+  // 카드가 파란 점을 가리지 않게, 점이 카드 위쪽 빈 곳에 오도록 지도를 올림
+  let needLift = false;
+  function liftDot() {
+    if (!myDot || locCard.hidden) return;
+    const mapBox = map.getContainer().getBoundingClientRect();
+    const cardTop = locCard.getBoundingClientRect().top;
+    const dotY = mapBox.top + map.latLngToContainerPoint(myDot.getLatLng()).y;
+    const target = mapBox.top + (cardTop - mapBox.top) / 2;
+    if (dotY > cardTop - 40) map.panBy([0, dotY - target]);
   }
 
   function onPosition(pos) {
@@ -295,7 +320,7 @@
       myDot.setLatLng(ll);
       myCircle.setLatLng(ll).setRadius(accuracy);
     }
-    if (firstFix) { map.setView(ll, Math.max(map.getZoom(), 14)); firstFix = false; }
+    if (firstFix) { map.setView(ll, Math.max(map.getZoom(), 14), { animate: false }); firstFix = false; needLift = true; }
     // 20m 이상 움직였을 때만 구역 다시 판정
     if (!lastCheck || distKm(lat, lon, lastCheck[0], lastCheck[1]) > 0.02) {
       lastCheck = ll;
