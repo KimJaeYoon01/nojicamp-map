@@ -4,6 +4,8 @@
   const COLORS = { red: "#e03131", yellow: "#f2b705", green: "#0a5c26", free: "#82c91e" };
   const LABELS = { red: "금지", yellow: "확인 필요", green: "허용 · 유료", free: "무료 노지" };
 
+  // 팝업이 열릴 때 위쪽 제목줄(48px)에 가리지 않게 여백을 두고 지도를 움직임
+  L.Popup.mergeOptions({ autoPanPaddingTopLeft: L.point(16, 64), autoPanPaddingBottomRight: L.point(16, 16) });
   const map = L.map("map", { zoomControl: true }).setView([36.5, 127.8], 7);
   window.nojiMap = map; // 디버깅용
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -840,6 +842,15 @@
     box.onclick = (e) => onReviewAction(e, box, id);
   }
 
+  // 팝업 위쪽이 제목줄 밑으로 들어가면 그만큼 지도를 아래로 내려 팝업 전체가 보이게
+  function keepPopupInView(popup) {
+    const el = popup?.getElement();
+    if (!el || !map.hasLayer(popup)) return;
+    const top = el.getBoundingClientRect().top;
+    const limit = document.querySelector(".topbar").getBoundingClientRect().bottom + 12;
+    if (top < limit) map.panBy([0, top - limit]);
+  }
+
   async function loadReviewBox(box, force = false, expanded = false) {
     try {
       renderReviews(box, await fetchReviews(box.dataset.id, force), expanded);
@@ -854,7 +865,7 @@
     if (!b) return;
     const act = b.dataset.rv;
     const list = reviewCache.get(placeId) || [];
-    if (act === "more") { renderReviews(box, list, true); return; }
+    if (act === "more") { renderReviews(box, list, true); keepPopupInView(map._popup); return; }
     if (act === "camper") { openCamperPage(b.dataset.uid); return; }
     if (!user) {
       const name = placeById.get(placeId)?.properties.name || "이 장소";
@@ -945,7 +956,7 @@
         : await sb.from("reviews").insert({ place_id: placeId, ...row });
       if (error) { alert("저장하지 못했어요. 잠시 후 다시 시도해 주세요."); console.error(error); return; }
       reviewDialog.close();
-      loadReviewBox(box, true);
+      loadReviewBox(box, true).then(() => keepPopupInView(map._popup));
     };
     reviewDialog.showModal();
   }
@@ -975,8 +986,8 @@
   map.on("popupopen", (e) => {
     const box = e.popup.getElement().querySelector(".reviews");
     if (!box || !sb) return;
-    // popup.update() 는 내용을 처음 HTML 로 되돌리므로 쓰지 않음 (팝업은 위쪽으로 자라고 길면 스크롤)
-    loadReviewBox(box);
+    // popup.update() 는 내용을 처음 HTML 로 되돌리므로 쓰지 않음. 내용이 늘어난 뒤 화면 밖으로 나가면 지도를 옮김
+    loadReviewBox(box).then(() => keepPopupInView(e.popup));
   });
 
   // 로그인 상태가 바뀌면 관리자 여부 확인, 열린 팝업 후기 다시 그림
