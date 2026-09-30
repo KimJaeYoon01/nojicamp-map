@@ -39,10 +39,22 @@
     return `https://map.naver.com/p/search/${q}?c=${p.lon.toFixed(6)},${p.lat.toFixed(6)},16,0,0,0,dh`;
   }
 
+  // 🆕 새 소식: 최근 NEWS_DAYS 일 안에 추가되거나 정보가 바뀐 장소 (build_campsites.py 가 ad/up 날짜 기록)
+  const NEWS_DAYS = 30;
+  const shortDate = (d) => d.slice(5).replace("-", ".");
+  function isRecent(d) { return !!d && (Date.now() - new Date(d + "T00:00:00").getTime()) / 864e5 <= NEWS_DAYS; }
+  function newsOf(p) {
+    if (isRecent(p.ad)) return { kind: "new", date: p.ad, label: `🆕 새로 추가 ${shortDate(p.ad)}` };
+    if (isRecent(p.up)) return { kind: "up", date: p.up, label: `✏️ 정보 업데이트 ${shortDate(p.up)}` };
+    return null;
+  }
+
   function popupHtml(p) {
+    const news = newsOf(p);
     return `<div class="popup">
       <h3>${escapeHtml(p.name)}</h3>
       <span class="badge ${p.status}">${LABELS[p.status]}</span>
+      ${news ? `<span class="badge news ${news.kind}">${news.label}</span>` : ""}
       <p class="law">${escapeHtml(p.law)}</p>
       ${p.tip ? `<p class="tip">💬 ${escapeHtml(p.tip)}</p>` : ""}
       ${p.addr ? `<p class="law">📍 ${escapeHtml(p.addr)}</p>` : ""}
@@ -1025,16 +1037,35 @@
   // Supabase 함수 rank_saved / rank_reviews / rank_campers 로 "몇 번"만 셈 (누가 저장했는지는 안 드러남)
   const rankDialog = document.getElementById("rankDialog");
   const RANK_TABS = {
+    news:     { label: "🆕 새 소식", unit: "" },
     favorite: { label: "⭐ 즐겨찾기", unit: "명이 즐겨찾기" },
     wishlist: { label: "🚩 가고 싶은 곳", unit: "명이 가고 싶어 해요" },
     rating:   { label: "👍 별점 좋은 곳", unit: "" },
     reviews:  { label: "✍ 후기 많은 곳", unit: "" },
     campers:  { label: "🏕 활동 캠퍼", unit: "" },
   };
-  const rankState = { tab: "favorite", days: null, freeOnly: false };
+  const rankState = { tab: "news", days: null, freeOnly: false };
   const rankCache = new Map();
 
+  // 새 소식: 서버 없이 야영장 데이터의 날짜로 만듦 (최신순)
+  const newsList = (window.CAMPSITES?.features || [])
+    .map((f) => ({ f, news: newsOf(f.properties) })).filter((x) => x.news)
+    .sort((a, b) => b.news.date.localeCompare(a.news.date) || (a.news.kind === "new" ? -1 : 1));
+  const NEWS_SEEN_KEY = "nojicamp.newsSeen.v1";
+  const latestNews = newsList[0]?.news.date || "";
+  function newsUnseen() {
+    try { return !!latestNews && (localStorage.getItem(NEWS_SEEN_KEY) || "") < latestNews; } catch { return false; }
+  }
+  function markNewsSeen() {
+    try { localStorage.setItem(NEWS_SEEN_KEY, latestNews); } catch { /* 무시 */ }
+    document.getElementById("rankBtn").classList.remove("has-news");
+  }
+  if (newsUnseen()) document.getElementById("rankBtn").classList.add("has-news");
+
   async function fetchRank({ tab, days }) {
+    if (tab === "news") {
+      return newsList.filter((x) => days == null || (Date.now() - new Date(x.news.date + "T00:00:00")) / 864e5 <= days);
+    }
     const key = `${tab}:${days}`;
     if (rankCache.has(key)) return rankCache.get(key);
     let q;
@@ -1072,7 +1103,16 @@
     }
     if (rankState.tab !== tab || rankState.days !== days || rankState.freeOnly !== freeOnly) return; // 그 사이 탭 바뀜
     let html;
-    if (tab === "campers") {
+    if (tab === "news") {
+      markNewsSeen();
+      html = rows.filter((x) => !freeOnly || x.f.properties.fee === "free").slice(0, 50).map(({ f, news }) => {
+        const p = f.properties;
+        return `<li><span class="rank-no news-mark">${news.kind === "new" ? "🆕" : "✏️"}</span>
+          <button class="go" data-go="${escapeHtml(p.id)}">
+            <span class="sr-dot" style="background:${COLORS[p.fee === "free" ? "free" : "green"]}"></span>${escapeHtml(p.name)}
+            <small>${news.kind === "new" ? "새로 추가" : "정보 업데이트"} ${shortDate(news.date)} · ${escapeHtml(p.addr || "")}</small></button></li>`;
+      }).join("");
+    } else if (tab === "campers") {
       html = rows.map((r, i) => `
         <li><span class="rank-no">${medal(i)}</span>
           <button class="go" data-camper="${escapeHtml(r.user_id)}">🏕 ${escapeHtml(r.nickname)}
@@ -1091,7 +1131,9 @@
             <small>${escapeHtml(stat)} · ${escapeHtml(p.addr || "")}</small></button></li>`;
       }).join("");
     }
-    const empty = tab === "rating" ? "후기가 2개 이상 모인 장소가 아직 없어요." : "아직 데이터가 없어요. 첫 번째가 되어 보세요!";
+    const empty = tab === "rating" ? "후기가 2개 이상 모인 장소가 아직 없어요."
+      : tab === "news" ? `최근 ${NEWS_DAYS}일 동안 새로 추가되거나 바뀐 곳이 없어요.`
+      : "아직 데이터가 없어요. 첫 번째가 되어 보세요!";
     rankDialog.querySelector(".rank-list").innerHTML = html || `<li class="muted">${empty}</li>`;
   }
 
@@ -1107,7 +1149,8 @@
     if (t.dataset.camper) { rankDialog.close(); openCamperPage(t.dataset.camper); }
   });
   document.getElementById("rankBtn").addEventListener("click", () => {
-    if (!sb) { alert("순위를 불러오지 못했어요."); return; }
+    if (newsUnseen()) rankState.tab = "news";
+    if (!sb && rankState.tab !== "news") { alert("순위를 불러오지 못했어요."); return; }
     renderRank();
     if (!rankDialog.open) rankDialog.showModal();
   });

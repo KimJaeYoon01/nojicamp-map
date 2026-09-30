@@ -247,3 +247,11 @@ dialog.sheet button.primary { background: #2b8a3e; border-color: #2b8a3e; color:
   color: inherit; font-size: 14px; cursor: pointer; }
 .rank-list .go small { display: block; color: var(--muted); font-size: 12px; }
 @media (max-width: 600px) { .topbar .icon-btn { width: 30px; height: 30px; font-size: 14px; } }
+
+/* 새 소식 */
+.popup .badge.news { margin-left: 4px; background: #fff3bf; color: #5c3c00; }
+.popup .badge.news.up { background: #e7f5ff; color: #1864ab; }
+.news-mark { font-size: 16px; }
+#rankBtn { position: relative; }
+#rankBtn.has-news::after { content: ""; position: absolute; top: 1px; right: 1px; width: 9px; height: 9px;
+  border-radius: 50%; background: #fa5252; border: 2px solid var(--panel); }
