@@ -1,4 +1,4 @@
-# 노지캠핑 지도
+# 모닥 - 노지캠핑
 
 대한민국 법령 기준 노지캠핑 금지·주의·허용 구역 지도 — https://kimjaeyoon01.github.io/nojicamp-map/
 

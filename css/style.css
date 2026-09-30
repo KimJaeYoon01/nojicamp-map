@@ -178,3 +178,9 @@ dialog.sheet button.primary { background: #2b8a3e; border-color: #2b8a3e; color:
 .login-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
   margin-top: 8px; padding: 11px !important; font-weight: 600; }
 .login-btn.kakao { background: #fee500 !important; border-color: #fee500 !important; color: #191600 !important; }
+
+/* 로고: 아이콘 + 모닥 + 노지캠핑 */
+.topbar h1 { display: flex; align-items: center; gap: 7px; }
+.topbar .logo { width: 28px; height: 28px; border-radius: 7px; }
+.topbar .brand { font-weight: 800; letter-spacing: -0.3px; }
+.topbar .title-text { font-weight: 500; color: var(--muted); font-size: 15px; }
