@@ -130,3 +130,21 @@ dialog button { padding: 6px 16px; border-radius: 6px; border: 1px solid var(--b
 .search-results .sr-head { padding: 6px 12px 2px; font-size: 11px; color: var(--muted); cursor: default; }
 .search-results .sr-head:hover { background: none; }
 @media (max-width: 600px) { .title-text { display: none; } .search { max-width: none; } }
+
+/* 장소 제보 */
+.report-btn { margin-top: 0; font-size: 22px; font-weight: 700; color: #2b8a3e; }
+.report-btn.active { background: #2b8a3e; color: #fff; }
+.report-pin { position: fixed; z-index: 1050; left: 50%; top: calc(50% + 24px); transform: translate(-50%, -100%);
+  font-size: 36px; line-height: 1; pointer-events: none; filter: drop-shadow(0 2px 2px rgba(0,0,0,.4)); }
+.report-pin[hidden] { display: none; }
+.report-card { border-left-color: #2b8a3e; padding-right: 14px; }
+.rp-warn { margin-top: 6px; padding: 5px 8px; border-radius: 6px; font-size: 13px; }
+.rp-warn.red { background: rgba(224,49,49,.12); }
+.rp-warn.yellow { background: rgba(242,183,5,.18); }
+.rp-warn.none { background: rgba(28,126,214,.1); }
+.rp-coord { margin-top: 6px; font-size: 11px; color: var(--muted); font-family: monospace; }
+.rp-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+.rp-btns button { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg);
+  color: var(--fg); font-size: 14px; cursor: pointer; }
+.rp-btns .rp-ok { background: #2b8a3e; border-color: #2b8a3e; color: #fff; font-weight: 700; }
+.rp-btns .rp-ok:disabled { opacity: .45; cursor: not-allowed; }

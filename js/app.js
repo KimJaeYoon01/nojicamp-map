@@ -340,6 +340,82 @@
     watchId = navigator.geolocation.watchPosition(onPosition, onPosError,
       { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
   });
+
+  // ---- 장소 제보 (＋ 버튼) ----
+  // 지도 가운데 핀으로 위치를 고르면 좌표가 채워진 구글 설문지가 열림. 제보는 운영자가 확인 후 반영.
+  const REPORT_FORM = {
+    url: "https://docs.google.com/forms/d/e/1FAIpQLSc-BL4YJ6PR9SNBsKyvUjYiZhQl7DyvRGmlJSJuAbfR6vXoIQ/viewform",
+    coords: "entry.12597568",  // '위치(좌표)' 질문
+    zone: "entry.695150721",   // '구역 판정' 질문
+  };
+  const reportPin = document.getElementById("reportPin");
+  const reportCard = document.getElementById("reportCard");
+  let reporting = false, reportZone = "", reportSeq = 0;
+
+  async function updateReportCard() {
+    if (!reporting) return;
+    const seq = ++reportSeq;
+    const c = map.getCenter();
+    const hits = await zonesAt(c.lat, c.lng);
+    if (seq !== reportSeq || !reporting) return;
+    const red = hits.find((h) => h.status === "red");
+    const yellow = hits.filter((h) => h.status === "yellow");
+    reportZone = red ? `금지: ${red.name}` : yellow.length ? `확인 필요: ${yellow.map((h) => h.name).join(", ")}` : "구역 밖";
+    const warn = red ? `<div class="rp-warn red">⚠ 여기는 <b>${escapeHtml(red.name)}</b> 금지 구역이라 야영하면 안 돼요.</div>`
+      : yellow.length ? `<div class="rp-warn yellow">여기는 확인이 필요한 구역이에요 (${escapeHtml(yellow.map((h) => h.name).join(", "))}).</div>`
+      : `<div class="rp-warn none">표시된 금지·주의 구역 밖이에요.</div>`;
+    const ready = !!REPORT_FORM.url;
+    reportCard.innerHTML = `<div class="loc-head">＋ 무료 노지 제보</div>
+      <div class="loc-law">지도를 움직여 가운데 핀을 제보할 자리에 맞춰 주세요.</div>
+      ${warn}
+      <div class="rp-coord">${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}</div>
+      ${ready ? "" : `<div class="rp-warn yellow">제보 설문지가 아직 연결되지 않았어요.</div>`}
+      <div class="rp-btns"><button type="button" class="rp-cancel">취소</button>
+        <button type="button" class="rp-ok" ${ready && !red ? "" : "disabled"}>이 위치로 제보</button></div>`;
+    reportCard.querySelector(".rp-cancel").onclick = stopReport;
+    reportCard.querySelector(".rp-ok").onclick = () => {
+      const params = new URLSearchParams({ usp: "pp_url" });
+      if (REPORT_FORM.coords) params.set(REPORT_FORM.coords, `${c.lat.toFixed(6)}, ${c.lng.toFixed(6)}`);
+      if (REPORT_FORM.zone) params.set(REPORT_FORM.zone, reportZone);
+      window.open(`${REPORT_FORM.url}?${params}`, "_blank", "noopener");
+      stopReport();
+    };
+  }
+
+  function startReport() {
+    reporting = true;
+    reportBtn.classList.add("active");
+    map.closePopup();
+    if (myDot) map.setView(myDot.getLatLng(), Math.max(map.getZoom(), 15));
+    else if (map.getZoom() < 13) map.setZoom(13);
+    locCard.hidden = true; // 같은 자리에 뜨는 내 위치 카드는 가림
+    reportPin.hidden = false;
+    reportCard.hidden = false;
+    updateReportCard();
+  }
+  function stopReport() {
+    reporting = false;
+    reportBtn.classList.remove("active");
+    reportPin.hidden = true;
+    reportCard.hidden = true;
+  }
+  map.on("moveend", updateReportCard);
+
+  const ReportControl = L.Control.extend({
+    options: { position: "topleft" },
+    onAdd() {
+      const btn = L.DomUtil.create("button", "locate-btn report-btn");
+      btn.type = "button";
+      btn.title = "무료 노지 제보";
+      btn.setAttribute("aria-label", "무료 노지 제보");
+      btn.textContent = "＋";
+      L.DomEvent.disableClickPropagation(btn);
+      return btn;
+    },
+  });
+  const reportBtn = new ReportControl().addTo(map).getContainer();
+  reportBtn.addEventListener("click", () => (reporting ? stopReport() : startReport()));
+
   // ---- 검색 ----
   // 입력하는 대로 야영장(이름·주소) 목록, Enter 를 누르면 지역·주소 검색(OpenStreetMap Nominatim)
   const searchForm = document.getElementById("searchForm");
