@@ -42,6 +42,7 @@
       <h3>${escapeHtml(p.name)}</h3>
       <span class="badge ${p.status}">${LABELS[p.status]}</span>
       <p class="law">${escapeHtml(p.law)}</p>
+      ${p.tip ? `<p class="tip">💬 ${escapeHtml(p.tip)}</p>` : ""}
       ${p.addr ? `<p class="law">📍 ${escapeHtml(p.addr)}</p>` : ""}
       ${p.tel ? `<p class="law">☎ ${escapeHtml(p.tel)}</p>` : ""}
       ${safeUrl(p.url) && !/naver\.me/.test(p.url) ? `<p class="law"><a href="${escapeHtml(p.url)}" target="_blank" rel="noopener">자세히 보기 ↗</a></p>` : ""}

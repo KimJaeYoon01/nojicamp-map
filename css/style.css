@@ -107,3 +107,6 @@ dialog button { padding: 6px 16px; border-radius: 6px; border: 1px solid var(--b
 
 .disclaimer .copyright { margin-top: 2px; font-size: 11px; color: var(--muted); }
 .credits { font-size: 12px; color: var(--muted); }
+.popup .tip { margin: 6px 0 0; padding: 6px 8px; font-size: 13px; line-height: 1.45;
+  background: rgba(130, 201, 30, .15); border-radius: 6px; }
+.leaflet-popup-content { max-width: 300px; }
