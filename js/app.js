@@ -829,14 +829,26 @@
     if (act === "report") openReportForm(+b.dataset.rid);
   }
 
+  // 닉네임: 마지막으로 쓴 닉네임 → 카카오·구글 이름 → "캠퍼"
+  const NICK_KEY = "nojicamp.nickname.v1";
   function defaultNickname() {
+    let last = "";
+    try { last = localStorage.getItem(`${NICK_KEY}.${user?.id}`) || ""; } catch { /* 무시 */ }
     const m = user?.user_metadata || {};
-    return (m.name || m.full_name || m.nickname || m.preferred_username || "캠퍼").slice(0, 30);
+    return (last || m.name || m.full_name || m.nickname || m.preferred_username || m.user_name || "캠퍼").slice(0, 30);
+  }
+  function rememberNickname(nick) {
+    try { localStorage.setItem(`${NICK_KEY}.${user?.id}`, nick); } catch { /* 무시 */ }
+  }
+  // 한국 시간(기기 시간) 기준 오늘 날짜 YYYY-MM-DD (toISOString 은 UTC 라 새벽에 하루 전이 됨)
+  function todayLocal() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }
 
   function openReviewForm(placeId, mine, box) {
     const name = placeById.get(placeId)?.properties.name || "";
-    const r = mine || { rating: 0, content: "", visited_on: "", tags: [], nickname: defaultNickname() };
+    const r = mine || { rating: 0, content: "", visited_on: todayLocal(), tags: [], nickname: defaultNickname() };
     reviewDialog.innerHTML = `
       <form method="dialog" class="rv-form">
         <h2>✍ ${escapeHtml(name)} 후기</h2>
@@ -845,7 +857,7 @@
         </div>
         <textarea name="content" rows="4" maxlength="500" minlength="2" required
           placeholder="화장실·물·자리 상황, 분위기 등 다른 캠퍼에게 도움이 될 이야기를 남겨 주세요.">${escapeHtml(r.content)}</textarea>
-        <label class="rv-field">방문한 날 <input type="date" name="visited_on" value="${escapeHtml(r.visited_on || "")}" max="${new Date().toISOString().slice(0, 10)}"></label>
+        <label class="rv-field">방문한 날 <input type="date" name="visited_on" value="${escapeHtml(r.visited_on || "")}" max="${todayLocal()}"></label>
         <div class="rv-tagpick">${TAGS.map((t) => `<label><input type="checkbox" name="tags" value="${escapeHtml(t)}" ${r.tags?.includes(t) ? "checked" : ""}><span>${escapeHtml(t)}</span></label>`).join("")}</div>
         <label class="rv-field">닉네임 <input name="nickname" maxlength="30" required value="${escapeHtml(r.nickname)}"></label>
         <p class="muted">욕설·광고·개인정보가 담긴 후기는 삭제될 수 있어요. 닉네임과 후기 내용은 모두에게 공개돼요.</p>
@@ -868,6 +880,7 @@
         ? await sb.from("reviews").update(row).eq("id", mine.id)
         : await sb.from("reviews").insert({ place_id: placeId, ...row });
       if (error) { alert("저장하지 못했어요. 잠시 후 다시 시도해 주세요."); console.error(error); return; }
+      rememberNickname(row.nickname);
       reviewDialog.close();
       loadReviewBox(box, true);
     };
