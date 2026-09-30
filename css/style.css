@@ -214,23 +214,22 @@ dialog.sheet button.primary { background: #2b8a3e; border-color: #2b8a3e; color:
   font-size: 12px !important; cursor: pointer; text-decoration: underline; }
 .camper-list .go { font-size: 14px; }
 
-/* ---- 아래 영역 정리: 칩 한 줄 + 카드 + 첫 방문 안내 ---- */
-.chips { position: fixed; z-index: 1000; left: 50%; transform: translateX(-50%); bottom: 24px;
-  display: flex; gap: 6px; max-width: calc(100% - 32px); overflow-x: auto; padding: 4px;
-  background: var(--panel); border: 1px solid var(--border); border-radius: 999px;
-  box-shadow: 0 2px 10px rgba(0,0,0,.15); scrollbar-width: none; }
-.chips::-webkit-scrollbar { display: none; }
-.chips button { display: flex; align-items: center; gap: 6px; flex: none; padding: 6px 12px; border-radius: 999px;
-  border: 1px solid transparent; background: transparent; color: var(--fg); font-size: 13px; font-weight: 600; cursor: pointer; }
-.chips button[aria-pressed="true"] { background: rgba(127,127,127,.14); border-color: var(--border); }
-.chips button[aria-pressed="false"] { opacity: .45; text-decoration: line-through; }
-.chips .swatch { width: 12px; height: 12px; }
-.loc-card { bottom: 78px; max-height: 45vh; overflow-y: auto; }
+/* ---- 위치 카드 접기 · 첫 방문 안내 ---- */
+.loc-card { max-height: 45vh; overflow-y: auto; }
 .loc-card .loc-head { display: block; width: 100%; text-align: left; padding: 0; margin: 0 0 4px; border: 0; background: none;
   color: inherit; font: inherit; font-weight: 700; font-size: 14px; cursor: pointer; }
 .loc-fold { color: var(--muted); font-size: 12px; }
 .loc-card.min .loc-law, .loc-card.min .loc-near, .loc-card.min .loc-acc { display: none; }
 .loc-card.min .loc-head { margin: 0; }
-.disclaimer { bottom: 78px; }
 .disclaimer[hidden] { display: none; }
 .leaflet-control-attribution { font-size: 10px; }
+
+/* ---- 휴대폰: 구역 표시를 아래쪽 2줄×2칸 체크박스로 (옆으로 밀 필요 없이 한눈에) ---- */
+@media (max-width: 600px) {
+  .panel { top: auto; bottom: 22px; left: 12px; right: 12px; width: auto; padding: 8px 10px; }
+  .panel h2, .panel .hint, .panel .row small { display: none; }
+  .legend-rows { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; }
+  .panel .row { flex-wrap: nowrap; padding: 5px 2px; font-size: 14px; white-space: nowrap; }
+  .panel .row input { width: 18px; height: 18px; margin: 0; }
+  .loc-card, .disclaimer { bottom: 104px; }
+}

@@ -23,7 +23,7 @@
   <meta name="twitter:card" content="summary_large_image">
   <meta name="apple-mobile-web-app-title" content="모닥">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <link rel="stylesheet" href="css/style.css?v=202610010202">
+  <link rel="stylesheet" href="css/style.css?v=202610010206">
 </head>
 <body>
   <header class="topbar">
@@ -43,13 +43,20 @@
   <div class="report-pin" id="reportPin" hidden aria-hidden="true">📍</div>
   <div class="loc-card report-card" id="reportCard" hidden aria-live="polite"></div>
 
-  <!-- 지도 표시 켜고 끄기 (한 줄 칩) -->
-  <div class="chips" id="legend" role="group" aria-label="지도 표시 켜고 끄기">
-    <button type="button" data-layer="red" aria-pressed="true"><span class="swatch red"></span>금지</button>
-    <button type="button" data-layer="yellow" aria-pressed="true"><span class="swatch yellow"></span>확인 필요</button>
-    <button type="button" data-layer="free" aria-pressed="true"><span class="swatch free"></span>무료 노지</button>
-    <button type="button" data-layer="green" aria-pressed="true"><span class="swatch dot"></span>야영장</button>
-  </div>
+  <aside class="panel" id="legend">
+    <h2>구역 표시</h2>
+    <div class="legend-rows">
+      <label class="row"><input type="checkbox" data-layer="red" checked>
+        <span class="swatch red"></span>금지 <small>법령상 야영·취사 금지</small></label>
+      <label class="row"><input type="checkbox" data-layer="yellow" checked>
+        <span class="swatch yellow"></span>확인 필요 <small>조례·소유자 확인</small></label>
+      <label class="row"><input type="checkbox" data-layer="free" checked>
+        <span class="swatch free"></span>무료 노지 <small>직접 모은 장소 · 현장 확인 필요</small></label>
+      <label class="row"><input type="checkbox" data-layer="green" checked>
+        <span class="swatch dot"></span>허용 · 유료 <small>등록 야영장 (예약·요금)</small></label>
+    </div>
+    <p class="hint">색이 없는 곳은 <b>판단 정보 없음</b>입니다. 합법이라는 뜻이 아니에요.</p>
+  </aside>
 
   <!-- 첫 방문에만 보이는 안내 (닫으면 다시 안 뜸, 같은 내용은 ? 안내창에 항상 있음) -->
   <div class="disclaimer" id="disclaimer" hidden>
@@ -72,7 +79,7 @@
       <li><b>연두</b>: 직접 모은 무료 노지 장소. 금지 구역 밖인 곳만 표시하지만 공식 허용지는 아니므로 현장 안내판·지자체 공지를 확인하세요</li>
     </ul>
     <p>어디서든 쓰레기 투기·불법 취사(불 피우기)는 경범죄처벌법·산림보호법 등으로 처벌될 수 있습니다.</p>
-    <p><b>본 지도는 참고용이며 법률 자문이 아닙니다.</b> 현장 안내판과 지자체 공지가 우선합니다. 아래 칩(금지·확인 필요·무료 노지·야영장)을 누르면 지도에서 켜고 끌 수 있어요.</p>
+    <p><b>본 지도는 참고용이며 법률 자문이 아닙니다.</b> 현장 안내판과 지자체 공지가 우선합니다. 구역 표시의 체크박스로 지도에서 켜고 끌 수 있어요.</p>
     <p class="credits">데이터 출처: 브이월드(국토교통부 등), 공공데이터포털(국립공원공단·산림청·한국관광공사 고캠핑), OpenStreetMap(배경지도·지역 검색 Nominatim). 공공데이터는 각 기관의 이용 조건(공공누리 등)을 따릅니다.<br>
     지도 구성·분류·코드 © 2026 KimJaeYoon01. 무단 복제·수정·재배포를 금지합니다.<br>
     방문 통계는 GoatCounter 로 집계합니다 (쿠키를 쓰지 않고 개인을 식별하지 않음). 내 위치는 브라우저 안에서만 쓰이고 저장·전송되지 않습니다.<br>
@@ -84,7 +91,7 @@
   <!-- 방문 통계 (GoatCounter: 쿠키 없음, 개인 식별 안 함. localhost 에서는 집계 안 됨) -->
   <script data-goatcounter="https://kimjaeyoon010208.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-  <script src="js/campsites.js?v=202610010202"></script>
-  <script src="js/app.js?v=202610010202"></script>
+  <script src="js/campsites.js?v=202610010206"></script>
+  <script src="js/app.js?v=202610010206"></script>
 </body>
 </html>

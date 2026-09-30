@@ -126,13 +126,11 @@
   map.on("zoomend", updateCamps);
   updateCamps();
 
-  // 레이어 켜고 끄기 (아래 칩)
-  document.querySelectorAll("#legend [data-layer]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const on = btn.getAttribute("aria-pressed") !== "true";
-      btn.setAttribute("aria-pressed", String(on));
-      const g = groups[btn.dataset.layer];
-      on ? g.addTo(map) : map.removeLayer(g);
+  // 레이어 켜고 끄기 (구역 표시 체크박스)
+  document.querySelectorAll("#legend [data-layer]").forEach((cb) => {
+    cb.addEventListener("change", () => {
+      const g = groups[cb.dataset.layer];
+      cb.checked ? g.addTo(map) : map.removeLayer(g);
       reorder(); // 다시 켜면 맨 위에 그려지므로 순서 복구
     });
   });
