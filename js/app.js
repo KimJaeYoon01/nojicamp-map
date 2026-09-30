@@ -49,7 +49,8 @@
       ${p.lat ? `<p class="law"><a href="${escapeHtml(naverUrl(p))}" target="_blank" rel="noopener">네이버 지도에서 보기 ↗</a></p>` : ""}
       ${p.id ? `<div class="save-btns" data-id="${escapeHtml(p.id)}">
         <button type="button" data-list="favorite">☆ 즐겨찾기</button>
-        <button type="button" data-list="wishlist" class="wish">⚑ 가고 싶은 곳</button></div>` : ""}
+        <button type="button" data-list="wishlist" class="wish">⚑ 가고 싶은 곳</button></div>
+      <div class="reviews" data-id="${escapeHtml(p.id)}"><p class="muted">후기 불러오는 중…</p></div>` : ""}
       ${p.source ? `<p class="law"><small>출처: ${escapeHtml(p.source)}</small></p>` : ""}
     </div>`;
   }
@@ -740,4 +741,176 @@
   renderUserBtn();
   // onAuthStateChange 안에서 바로 Supabase 를 호출하면 멈출 수 있어 다음 틱으로 미룸
   sb?.auth.onAuthStateChange((_event, session) => setTimeout(() => onSession(session), 0));
+  // ---- 장소 후기 (별점·한 줄 후기·방문일·태그, 신고) ----
+  // Supabase reviews / review_reports 표. 보기는 누구나, 쓰기는 로그인, 삭제는 본인·관리자(RLS).
+  const TAGS = ["🚻 화장실", "🚰 물", "🔥 취사 가능", "🚗 차박 가능", "🐶 반려견", "🌙 조용함", "📶 통신 잘 됨", "⚠️ 통제·공사"];
+  const reviewDialog = document.getElementById("reviewDialog");
+  let isAdmin = false;
+  const reviewCache = new Map(); // place_id -> 후기 배열
+
+  const stars = (n) => "★".repeat(n) + "☆".repeat(5 - n);
+  const fmtDate = (d) => (d ? String(d).slice(0, 10).replaceAll("-", ".") : "");
+
+  async function fetchReviews(placeId, force = false) {
+    if (!force && reviewCache.has(placeId)) return reviewCache.get(placeId);
+    const { data, error } = await sb.from("reviews")
+      .select("id, place_id, user_id, nickname, rating, content, visited_on, tags, created_at, updated_at")
+      .eq("place_id", placeId).order("created_at", { ascending: false }).limit(100);
+    if (error) throw error;
+    reviewCache.set(placeId, data);
+    return data;
+  }
+
+  function reviewItem(r) {
+    const mine = user && r.user_id === user.id;
+    const actions = [
+      mine ? `<button data-rv="edit">수정</button><button data-rv="delete" data-rid="${r.id}">삭제</button>` : "",
+      !mine && isAdmin ? `<button data-rv="delete" data-rid="${r.id}">관리자 삭제</button>` : "",
+      !mine ? `<button data-rv="report" data-rid="${r.id}">신고</button>` : "",
+    ].join("");
+    return `<li class="rv">
+      <div class="rv-head"><span class="rv-stars">${stars(r.rating)}</span>
+        <b>${escapeHtml(r.nickname)}</b>
+        <span class="muted">${r.visited_on ? `${fmtDate(r.visited_on)} 방문` : fmtDate(r.created_at)}</span></div>
+      ${r.tags?.length ? `<div class="rv-tags">${r.tags.map((t) => `<span>${escapeHtml(t)}</span>`).join("")}</div>` : ""}
+      <p class="rv-text">${escapeHtml(r.content)}</p>
+      <div class="rv-actions">${actions}</div></li>`;
+  }
+
+  function renderReviews(box, list, expanded = false) {
+    const id = box.dataset.id;
+    const n = list.length;
+    const avg = n ? list.reduce((s, r) => s + r.rating, 0) / n : 0;
+    // 태그는 많이 언급된 순으로 요약
+    const tagCount = {};
+    list.forEach((r) => (r.tags || []).forEach((t) => { tagCount[t] = (tagCount[t] || 0) + 1; }));
+    const topTags = Object.entries(tagCount).sort((a, b) => b[1] - a[1]).slice(0, 4);
+    const mineWritten = user && list.some((r) => r.user_id === user.id);
+    const shown = expanded ? list : list.slice(0, 3);
+    box.innerHTML = `
+      <div class="rv-summary">
+        ${n ? `<span class="rv-stars">${stars(Math.round(avg))}</span> <b>${avg.toFixed(1)}</b> <span class="muted">후기 ${n}개</span>`
+            : `<span class="muted">아직 후기가 없어요. 첫 후기를 남겨 주세요!</span>`}
+      </div>
+      ${topTags.length ? `<div class="rv-tags">${topTags.map(([t, c]) => `<span>${escapeHtml(t)} ${c}</span>`).join("")}</div>` : ""}
+      <ul class="rv-list">${shown.map(reviewItem).join("")}</ul>
+      ${n > shown.length ? `<button class="rv-more" data-rv="more">후기 ${n - shown.length}개 더 보기</button>` : ""}
+      <button class="rv-write" data-rv="write">✍ ${mineWritten ? "내 후기 수정" : "후기 쓰기"}</button>`;
+    box.onclick = (e) => onReviewAction(e, box, id);
+  }
+
+  async function loadReviewBox(box, force = false, expanded = false) {
+    try {
+      renderReviews(box, await fetchReviews(box.dataset.id, force), expanded);
+    } catch (e) {
+      console.error("후기 불러오기 실패", e);
+      box.innerHTML = `<p class="muted">후기를 불러오지 못했어요.</p>`;
+    }
+  }
+
+  async function onReviewAction(e, box, placeId) {
+    const b = e.target.closest("[data-rv]");
+    if (!b) return;
+    const act = b.dataset.rv;
+    const list = reviewCache.get(placeId) || [];
+    if (act === "more") { renderReviews(box, list, true); return; }
+    if (!user) {
+      const name = placeById.get(placeId)?.properties.name || "이 장소";
+      openUserDialog(`✍ <b>${escapeHtml(name)}</b> 후기를 쓰거나 신고하려면 로그인해 주세요.`);
+      return;
+    }
+    if (act === "write" || act === "edit") openReviewForm(placeId, list.find((r) => r.user_id === user.id), box);
+    if (act === "delete") {
+      if (!confirm("이 후기를 삭제할까요?")) return;
+      const { error } = await sb.from("reviews").delete().eq("id", +b.dataset.rid);
+      if (error) { alert("삭제하지 못했어요."); console.error(error); return; }
+      loadReviewBox(box, true);
+    }
+    if (act === "report") openReportForm(+b.dataset.rid);
+  }
+
+  function defaultNickname() {
+    const m = user?.user_metadata || {};
+    return (m.name || m.full_name || m.nickname || m.preferred_username || "캠퍼").slice(0, 30);
+  }
+
+  function openReviewForm(placeId, mine, box) {
+    const name = placeById.get(placeId)?.properties.name || "";
+    const r = mine || { rating: 0, content: "", visited_on: "", tags: [], nickname: defaultNickname() };
+    reviewDialog.innerHTML = `
+      <form method="dialog" class="rv-form">
+        <h2>✍ ${escapeHtml(name)} 후기</h2>
+        <div class="rv-rate" role="radiogroup" aria-label="별점">
+          ${[1, 2, 3, 4, 5].map((n) => `<label><input type="radio" name="rating" value="${n}" ${r.rating === n ? "checked" : ""} required><span>★</span></label>`).join("")}
+        </div>
+        <textarea name="content" rows="4" maxlength="500" minlength="2" required
+          placeholder="화장실·물·자리 상황, 분위기 등 다른 캠퍼에게 도움이 될 이야기를 남겨 주세요.">${escapeHtml(r.content)}</textarea>
+        <label class="rv-field">방문한 날 <input type="date" name="visited_on" value="${escapeHtml(r.visited_on || "")}" max="${new Date().toISOString().slice(0, 10)}"></label>
+        <div class="rv-tagpick">${TAGS.map((t) => `<label><input type="checkbox" name="tags" value="${escapeHtml(t)}" ${r.tags?.includes(t) ? "checked" : ""}><span>${escapeHtml(t)}</span></label>`).join("")}</div>
+        <label class="rv-field">닉네임 <input name="nickname" maxlength="30" required value="${escapeHtml(r.nickname)}"></label>
+        <p class="muted">욕설·광고·개인정보가 담긴 후기는 삭제될 수 있어요. 닉네임과 후기 내용은 모두에게 공개돼요.</p>
+        <div class="row-btns"><button value="cancel" formnovalidate>취소</button><button class="primary" value="ok">${mine ? "수정" : "등록"}</button></div>
+      </form>`;
+    const form = reviewDialog.querySelector("form");
+    form.onsubmit = async (e) => {
+      if (e.submitter?.value !== "ok") return;
+      e.preventDefault();
+      const fd = new FormData(form);
+      const row = {
+        rating: +fd.get("rating"),
+        content: String(fd.get("content")).trim(),
+        visited_on: fd.get("visited_on") || null,
+        tags: fd.getAll("tags"),
+        nickname: String(fd.get("nickname")).trim(),
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = mine
+        ? await sb.from("reviews").update(row).eq("id", mine.id)
+        : await sb.from("reviews").insert({ place_id: placeId, ...row });
+      if (error) { alert("저장하지 못했어요. 잠시 후 다시 시도해 주세요."); console.error(error); return; }
+      reviewDialog.close();
+      loadReviewBox(box, true);
+    };
+    reviewDialog.showModal();
+  }
+
+  function openReportForm(reviewId) {
+    reviewDialog.innerHTML = `
+      <form method="dialog">
+        <h2>🚩 후기 신고</h2>
+        <textarea name="reason" rows="3" maxlength="300" required placeholder="신고 이유를 적어 주세요 (욕설, 광고, 허위 정보, 개인정보 노출 등)"></textarea>
+        <div class="row-btns"><button value="cancel" formnovalidate>취소</button><button class="primary" value="ok">신고</button></div>
+      </form>`;
+    const form = reviewDialog.querySelector("form");
+    form.onsubmit = async (e) => {
+      if (e.submitter?.value !== "ok") return;
+      e.preventDefault();
+      const { error } = await sb.from("review_reports")
+        .insert({ review_id: reviewId, reason: String(new FormData(form).get("reason")).trim() });
+      reviewDialog.close();
+      if (error?.code === "23505") alert("이미 신고한 후기예요.");
+      else if (error) { alert("신고하지 못했어요."); console.error(error); }
+      else alert("신고가 접수됐어요. 확인 후 조치할게요.");
+    };
+    reviewDialog.showModal();
+  }
+  reviewDialog.addEventListener("click", (e) => { if (e.target === reviewDialog) reviewDialog.close(); });
+
+  map.on("popupopen", (e) => {
+    const box = e.popup.getElement().querySelector(".reviews");
+    if (!box || !sb) return;
+    // popup.update() 는 내용을 처음 HTML 로 되돌리므로 쓰지 않음 (팝업은 위쪽으로 자라고 길면 스크롤)
+    loadReviewBox(box);
+  });
+
+  // 로그인 상태가 바뀌면 관리자 여부 확인, 열린 팝업 후기 다시 그림
+  sb?.auth.onAuthStateChange((_event, session) => setTimeout(async () => {
+    isAdmin = false;
+    if (session?.user) {
+      const { data } = await sb.rpc("is_admin");
+      isAdmin = !!data;
+    }
+    const box = document.querySelector(".leaflet-popup .reviews");
+    if (box) renderReviews(box, reviewCache.get(box.dataset.id) || []);
+  }, 0));
 })();

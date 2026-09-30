@@ -185,3 +185,32 @@ dialog.sheet button.primary { background: #2b8a3e; border-color: #2b8a3e; color:
 .topbar .brand { font-weight: 800; letter-spacing: -0.3px; }
 .topbar .title-text { font-weight: 500; color: var(--muted); font-size: 15px; }
 .sheet .login-msg { padding: 8px 10px; border-radius: 8px; background: rgba(242,183,5,.15); font-size: 14px; line-height: 1.5; }
+
+/* 후기 */
+.leaflet-popup-content { max-height: 60vh; overflow-y: auto; }
+.popup .reviews { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(127,127,127,.3); }
+.rv-summary { font-size: 14px; }
+.rv-stars { color: #f59f00; letter-spacing: 1px; }
+.rv-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.rv-tags span { font-size: 11px; padding: 2px 7px; border-radius: 999px; background: rgba(127,127,127,.15); }
+.rv-list { list-style: none; margin: 6px 0 0; padding: 0; }
+.rv { padding: 7px 0; border-top: 1px dashed rgba(127,127,127,.3); }
+.rv-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; }
+.rv-text { margin: 4px 0 0; font-size: 13px; line-height: 1.45; white-space: pre-wrap; word-break: break-all; }
+.rv-actions { display: flex; gap: 4px; justify-content: flex-end; }
+.rv-actions button { border: 0; background: none; color: #868e96; font-size: 11px; cursor: pointer; padding: 2px 4px; }
+.rv-more, .rv-write { width: 100%; margin-top: 6px; padding: 7px; border-radius: 8px; border: 1px solid rgba(127,127,127,.35);
+  background: transparent; color: inherit; font-size: 13px; cursor: pointer; }
+.rv-write { background: #2b8a3e; border-color: #2b8a3e; color: #fff; font-weight: 700; }
+.rv-form textarea, .sheet textarea { width: 100%; box-sizing: border-box; margin-top: 8px; padding: 8px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; font-size: 14px; }
+.rv-rate { display: flex; gap: 4px; flex-direction: row; }
+.rv-rate input { position: absolute; opacity: 0; }
+.rv-rate span { font-size: 32px; color: #ced4da; cursor: pointer; }
+.rv-rate label:has(~ label input:checked) span, .rv-rate label:has(input:checked) span { color: #f59f00; }
+.rv-field { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 14px; }
+.rv-field input { flex: 1; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; }
+.rv-tagpick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.rv-tagpick input { position: absolute; opacity: 0; }
+.rv-tagpick span { display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); font-size: 13px; cursor: pointer; }
+.rv-tagpick input:checked + span { background: #d3f9d8; border-color: #2b8a3e; color: #1c1f23; font-weight: 700; }
