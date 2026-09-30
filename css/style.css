@@ -175,3 +175,6 @@ dialog.sheet button.primary { background: #2b8a3e; border-color: #2b8a3e; color:
 .popup .save-btns button.on { background: #fff3bf; border-color: #f2b705; color: #1c1f23; font-weight: 700; }
 .popup .save-btns button.on.wish { background: #d3f9d8; border-color: #2b8a3e; }
 @media (max-width: 600px) { .topbar { gap: 6px; padding: 0 10px; } }
+.login-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+  margin-top: 8px; padding: 11px !important; font-weight: 600; }
+.login-btn.kakao { background: #fee500 !important; border-color: #fee500 !important; color: #191600 !important; }

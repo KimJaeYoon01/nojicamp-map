@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- 노지캠핑 지도 앱 아이콘: 밤하늘 + 텐트 + 초승달 + 모닥불 -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#173f27"/>
+      <stop offset="1" stop-color="#0f6a31"/>
+    </linearGradient>
+    <clipPath id="round"><rect width="512" height="512" rx="112"/></clipPath>
+    <mask id="crescent">
+      <rect width="512" height="512" fill="#fff"/>
+      <circle cx="398" cy="110" r="42" fill="#000"/>
+    </mask>
+  </defs>
+  <g clip-path="url(#round)">
+    <rect width="512" height="512" fill="url(#bg)"/>
+    <!-- 초승달과 별 -->
+    <circle cx="376" cy="128" r="46" fill="#ffe066" mask="url(#crescent)"/>
+    <circle cx="150" cy="112" r="7" fill="#fff" opacity=".85"/>
+    <circle cx="232" cy="80" r="5" fill="#fff" opacity=".7"/>
+    <circle cx="96" cy="200" r="4" fill="#fff" opacity=".55"/>
+    <!-- 땅 (완만한 언덕) -->
+    <path d="M0 400 Q256 356 512 400 L512 512 L0 512 Z" fill="#0a3d1d"/>
+    <!-- 텐트 -->
+    <path d="M256 150 L404 390 L108 390 Z" fill="#ffffff"/>
+    <path d="M256 150 L404 390 L330 390 Z" fill="#d6e9da"/>
+    <path d="M256 268 L300 390 L212 390 Z" fill="#0f6a31"/>
+    <!-- 모닥불 -->
+    <path d="M420 396 q-16 -24 0 -50 q6 20 15 24 q8 -16 4 -32 q24 24 8 58 z" fill="#ff922b"/>
+    <path d="M424 396 q-6 -12 2 -24 q6 10 10 24 z" fill="#ffd43b"/>
+  </g>
+</svg>

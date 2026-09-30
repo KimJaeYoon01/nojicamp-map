@@ -657,8 +657,9 @@
       <h2>로그인</h2>
       <p class="muted">로그인하면 즐겨찾기와 가고 싶은 곳을 휴대폰·PC 어디서나 볼 수 있어요.
         지금 이 기기에 저장한 목록도 계정으로 옮겨져요.</p>
-      <button class="google-btn" data-act="google"><b style="color:#4285f4">G</b> 구글로 로그인</button>
-      <p class="muted">로그인하면 이메일·이름·프로필 사진을 받아 목록 저장에만 사용합니다.
+      <button class="login-btn kakao" data-act="kakao"><b>💬</b> 카카오로 로그인</button>
+      <button class="login-btn google-btn" data-act="google"><b style="color:#4285f4">G</b> 구글로 로그인</button>
+      <p class="muted">로그인하면 이메일·이름(닉네임)·프로필 사진을 받아 목록 저장에만 사용합니다.
         <a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a></p>
       <div class="row-btns"><button data-act="close">닫기</button></div>`;
     userDialog.showModal();
@@ -687,8 +688,8 @@
     const act = e.target.closest("[data-act]")?.dataset.act;
     if (act === "close") userDialog.close();
     if (act === "logout") { await sb.auth.signOut(); userDialog.close(); }
-    if (act === "google") {
-      await sb.auth.signInWithOAuth({ provider: "google", options: { redirectTo: location.origin + location.pathname } });
+    if (act === "google" || act === "kakao") {
+      await sb.auth.signInWithOAuth({ provider: act, options: { redirectTo: location.origin + location.pathname } });
     }
   });
 
