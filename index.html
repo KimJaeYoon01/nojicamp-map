@@ -22,78 +22,16 @@
   <meta property="og:locale" content="ko_KR">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="apple-mobile-web-app-title" content="모닥">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-  <link rel="stylesheet" href="css/style.css?v=202610011713">
+  <!-- 지도 데이터는 화면 코드와 동시에 받기 시작 -->
+  <link rel="preload" href="data/zones/index.json" as="fetch" crossorigin>
+  <link rel="preload" href="data/zones/overview.json" as="fetch" crossorigin>
+  <link rel="preload" href="data/campsites.json" as="fetch" crossorigin>
+  <script type="module" crossorigin src="./assets/index-M0zK9IMN.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-BPN1qFkd.css">
 </head>
 <body>
-  <header class="topbar">
-    <h1><img class="logo" src="icon.svg" alt="" width="28" height="28"><span class="brand">모닥</span><span class="title-text"> 노지캠핑</span></h1>
-    <form class="search" id="searchForm" role="search" autocomplete="off">
-      <input id="searchInput" type="search" placeholder="야영장·지역 검색" aria-label="야영장 또는 지역 검색">
-      <ul class="search-results" id="searchResults" hidden></ul>
-    </form>
-    <button id="rankBtn" class="icon-btn" aria-label="순위·새 소식" title="순위·새 소식">🏆</button>
-    <button id="listBtn" class="icon-btn" aria-label="내 목록" title="내 목록">★</button>
-    <button id="userBtn" class="icon-btn user-btn" aria-label="로그인" title="로그인">👤</button>
-    <button id="infoBtn" class="icon-btn" aria-label="안내">?</button>
-  </header>
-
-  <div id="map"></div>
-  <div class="status" id="status" hidden></div>
-  <div class="loc-card" id="locCard" hidden aria-live="polite"></div>
-  <div class="report-pin" id="reportPin" hidden aria-hidden="true">📍</div>
-  <div class="loc-card report-card" id="reportCard" hidden aria-live="polite"></div>
-
-  <aside class="panel" id="legend">
-    <h2>구역 표시</h2>
-    <div class="legend-rows">
-      <label class="row"><input type="checkbox" data-layer="red" checked>
-        <span class="swatch red"></span>금지 <small>법령상 야영·취사 금지</small></label>
-      <label class="row"><input type="checkbox" data-layer="yellow" checked>
-        <span class="swatch yellow"></span>확인 필요 <small>조례·소유자 확인</small></label>
-      <label class="row"><input type="checkbox" data-layer="free" checked>
-        <span class="swatch free"></span>무료 노지 <small>직접 모은 장소 · 현장 확인 필요</small></label>
-      <label class="row"><input type="checkbox" data-layer="green" checked>
-        <span class="swatch dot"></span>허용 · 유료 <small>등록 야영장 (예약·요금)</small></label>
-    </div>
-    <p class="hint">색이 없는 곳은 <b>판단 정보 없음</b>입니다. 합법이라는 뜻이 아니에요.</p>
-  </aside>
-
-  <!-- 첫 방문에만 보이는 안내 (닫으면 다시 안 뜸, 같은 내용은 ? 안내창에 항상 있음) -->
-  <div class="disclaimer" id="disclaimer" hidden>
-    본 지도는 참고용이며 법률 자문이 아닙니다. 현장 안내판과 지자체 공지가 우선합니다.
-    <button id="closeDisc" aria-label="닫기">✕</button>
-  </div>
-
-  <dialog id="userDialog" class="sheet"></dialog>
-  <dialog id="listDialog" class="sheet"></dialog>
-  <dialog id="reviewDialog" class="sheet"></dialog>
-  <dialog id="rankDialog" class="sheet rank-sheet"></dialog>
-
-  <dialog id="infoDialog">
-    <h2>이 지도에 대해</h2>
-    <p>공공데이터(국립공원, 상수원보호구역 등 경계)와 지자체 조례를 바탕으로 노지캠핑 가능 여부를 색으로 표시합니다.</p>
-    <ul>
-      <li><b>빨강</b>: 자연공원법·수도법·하천법(금지구역 지정)·조례 등으로 야영/취사가 금지된 곳</li>
-      <li><b>노랑</b>: 명시적 금지는 없지만 토지 소유자·관리청 허락 또는 조례 확인이 필요한 곳</li>
-      <li><b>진한 초록</b>: 등록 야영장·국립공원·휴양림 야영장 (유료)</li>
-      <li><b>색이 없는 곳</b>: 판단 정보가 없다는 뜻이에요. 합법이라는 뜻이 아니에요.</li>
-      <li><b>연두</b>: 직접 모은 무료 노지 장소. 금지 구역 밖인 곳만 표시하지만 공식 허용지는 아니므로 현장 안내판·지자체 공지를 확인하세요</li>
-    </ul>
-    <p>어디서든 쓰레기 투기·불법 취사(불 피우기)는 경범죄처벌법·산림보호법 등으로 처벌될 수 있습니다.</p>
-    <p><b>본 지도는 참고용이며 법률 자문이 아닙니다.</b> 현장 안내판과 지자체 공지가 우선합니다. 구역 표시의 체크박스로 지도에서 켜고 끌 수 있어요.</p>
-    <p class="credits">데이터 출처: 브이월드(국토교통부 등), 공공데이터포털(국립공원공단·산림청·한국관광공사 고캠핑), OpenStreetMap(배경지도·지역 검색 Nominatim). 공공데이터는 각 기관의 이용 조건(공공누리 등)을 따릅니다.<br>
-    지도 구성·분류·코드 © 2026 KimJaeYoon01. 무단 복제·수정·재배포를 금지합니다.<br>
-    방문 통계는 GoatCounter 로 집계합니다 (쿠키를 쓰지 않고 개인을 식별하지 않음). 내 위치는 브라우저 안에서만 쓰이고 저장·전송되지 않습니다.<br>
-    <a href="privacy.html" target="_blank" rel="noopener">개인정보처리방침</a></p>
-    <form method="dialog"><button>닫기</button></form>
-  </dialog>
-
-  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <div id="root"></div>
   <!-- 방문 통계 (GoatCounter: 쿠키 없음, 개인 식별 안 함. localhost 에서는 집계 안 됨) -->
   <script data-goatcounter="https://kimjaeyoon010208.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-  <script defer src="js/campsites.js?v=202610011713"></script>
-  <script defer src="js/app.js?v=202610011713"></script>
 </body>
 </html>
