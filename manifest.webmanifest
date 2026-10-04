@@ -1,0 +1,16 @@
+{
+  "name": "캠이웃 - 노지캠핑 지도",
+  "short_name": "캠이웃",
+  "description": "노지캠핑·낚시 지도: 야영 금지구역, 야영장, 무료 노지, 날씨·물때",
+  "start_url": "./#map",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f6a31",
+  "lang": "ko",
+  "icons": [
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
