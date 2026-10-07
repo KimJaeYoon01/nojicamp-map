@@ -2,3 +2,5 @@ User-agent: *
 Allow: /
 
 Sitemap: https://camiut.com/sitemap.xml
+
+#DaumWebMasterTool:1b41331b9eabc07d8c15064ec600efdfe437008fac94b48d2c83237a2f5d5f5d:opNCLOBne+BRvOIi5xReOg==
