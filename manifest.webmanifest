@@ -2,7 +2,7 @@
   "name": "캠이웃 - 노지캠핑 지도",
   "short_name": "캠이웃",
   "description": "노지캠핑·낚시 지도: 야영 금지구역, 야영장, 무료 노지, 날씨·물때",
-  "start_url": "./#map",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#ffffff",
