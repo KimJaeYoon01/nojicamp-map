@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>페이지를 찾을 수 없어요 | 캠이웃</title><meta name="robots" content="noindex">
+<script>
+  // 검색용 페이지가 아직 안 만들어진 새 글·물건(/b/12/, /m/34/)은 앱 화면으로 바로 보냄
+  (function () {
+    var m = location.pathname.match(/^\/(b|m)\/(\d+)\/?$/);
+    if (m) location.replace("/#" + (m[1] === "b" ? "board" : "market") + "/" + m[2]);
+  })();
+</script>
+<style>body{margin:0;font-family:"Malgun Gothic",system-ui,sans-serif;background:#f6f8f6;color:#1c1f23;text-align:center;padding:60px 16px}
+a{display:inline-block;margin-top:18px;padding:12px 22px;border-radius:999px;background:#2b8a3e;color:#fff;text-decoration:none;font-weight:800}</style>
+</head><body>
+<h1>⛺ 페이지를 찾을 수 없어요</h1>
+<p>지워졌거나 주소가 바뀐 페이지예요.</p>
+<a href="/">캠이웃 홈으로</a>
+</body></html>
